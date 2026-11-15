@@ -1,0 +1,26 @@
+{
+  "required": 23878,
+  "counts": {
+    "passed": 23878
+  },
+  "complete": true,
+  "by_hop": {
+    "1": {
+      "passed": 42
+    },
+    "2": {
+      "passed": 764
+    },
+    "3": {
+      "passed": 23072
+    }
+  },
+  "by_issuer_placement": {
+    "shared_hop": {
+      "passed": 14164
+    },
+    "separate_hops": {
+      "passed": 9714
+    }
+  }
+}

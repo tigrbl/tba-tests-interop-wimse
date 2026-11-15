@@ -1,0 +1,44 @@
+{
+  "required": 105,
+  "counts": {
+    "passed": 105
+  },
+  "complete": true,
+  "qualification": {
+    "passed": 37
+  },
+  "workload_api": {
+    "delivered": 85,
+    "refused": 20,
+    "next_mtls_verified": 85
+  },
+  "by_role": {
+    "tba-non-revocation-status": 30,
+    "tba-before-effect-enforcer": 25,
+    "tba-delegation-enforcer": 25,
+    "tba-approval-verifier": 25
+  },
+  "policy_decisions": {
+    "tba-approval-verifier:allow": 5,
+    "tba-approval-verifier:deny": 5,
+    "tba-before-effect-enforcer:allow": 5,
+    "tba-before-effect-enforcer:deny": 5,
+    "tba-delegation-enforcer:allow": 5,
+    "tba-delegation-enforcer:deny": 5,
+    "tba-non-revocation-status:allow": 5,
+    "tba-non-revocation-status:deny": 10
+  },
+  "observed_results": {
+    "current-non-revocation-proof-accepted": 5,
+    "workload-not-entitled-to-svid": 20,
+    "peer-identity-refused": 20,
+    "operation-scope-refused": 20,
+    "issuer-revocation-refused": 5,
+    "holder-self-revocation-refused": 5,
+    "fresh-authority-accepted-before-effect": 5,
+    "revocation-before-effect-refused": 10,
+    "current-delegation-accepted-before-effect": 5,
+    "matching-approval-display-accepted": 5,
+    "approval-display-mismatch-refused": 5
+  }
+}

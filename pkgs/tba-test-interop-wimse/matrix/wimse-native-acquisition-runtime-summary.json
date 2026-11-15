@@ -1,0 +1,59 @@
+{
+  "required": 627,
+  "counts": {
+    "passed": 627
+  },
+  "complete": true,
+  "qualification": {
+    "typed_flows": {
+      "passed": 87
+    },
+    "workload_api": {
+      "passed": 3
+    },
+    "issuers": {
+      "passed": 33
+    }
+  },
+  "workload_api": {
+    "delivered": 521,
+    "refused": 106,
+    "next_mtls_verified": 520
+  },
+  "by_hop": {
+    "1": {
+      "passed": 2
+    },
+    "2": {
+      "passed": 20
+    },
+    "3": {
+      "passed": 605
+    }
+  },
+  "by_path": {
+    "acquire": {
+      "passed": 2
+    },
+    "acquire > call": {
+      "passed": 20
+    },
+    "acquire > call > call": {
+      "passed": 570
+    },
+    "acquire > call > check": {
+      "passed": 35
+    }
+  },
+  "observed_results": {
+    "x509-svid-delivered": 1,
+    "workload-not-entitled-to-svid": 106,
+    "operation-authorized": 100,
+    "peer-identity-refused": 200,
+    "operation-scope-refused": 200,
+    "fresh-status-accepted": 5,
+    "revoked-status-refused": 5,
+    "stale-status-refused": 5,
+    "unavailable-status-refused": 5
+  }
+}

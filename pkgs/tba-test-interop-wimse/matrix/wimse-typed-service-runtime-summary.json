@@ -1,0 +1,66 @@
+{
+  "required": 21140,
+  "counts": {
+    "passed": 21140
+  },
+  "complete": true,
+  "qualification": {
+    "passed": 216
+  },
+  "by_scope": {
+    "existing-peer": {
+      "passed": 6241
+    },
+    "native": {
+      "passed": 14899
+    }
+  },
+  "by_hop": {
+    "1": {
+      "passed": 6
+    },
+    "3": {
+      "passed": 20309
+    },
+    "2": {
+      "passed": 825
+    }
+  },
+  "by_flow": {
+    "token-exchange": {
+      "passed": 2711
+    },
+    "status-checks": {
+      "passed": 13603
+    },
+    "delegation-and-redemption": {
+      "passed": 2878
+    },
+    "spire-workload-api": {
+      "passed": 184
+    },
+    "broker-and-bearer-provider": {
+      "passed": 1764
+    }
+  },
+  "by_status_placement": {
+    "call > check > call": {
+      "passed": 5776
+    },
+    "call > call > check": {
+      "passed": 3600
+    },
+    "call > check": {
+      "passed": 228
+    },
+    "check > call": {
+      "passed": 228
+    },
+    "check > call > call": {
+      "passed": 3600
+    },
+    "check > call > check": {
+      "passed": 171
+    }
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "required": 728,
+  "counts": {
+    "passed": 728
+  },
+  "complete": true,
+  "by_hop": {
+    "1": {
+      "passed": 220
+    },
+    "2": {
+      "passed": 508
+    }
+  },
+  "observed_decisions": {
+    "allow": 290,
+    "deny": 364,
+    "allow-then-deny": 6,
+    "measure": 64,
+    "provider-policy": 4
+  },
+  "scenario_families": 20
+}

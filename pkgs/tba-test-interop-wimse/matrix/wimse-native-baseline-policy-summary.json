@@ -1,0 +1,101 @@
+{
+  "required": 2396,
+  "counts": {
+    "passed": 2396
+  },
+  "complete": true,
+  "qualification": {
+    "passed": 167
+  },
+  "transaction_and_policy": {
+    "issued_transaction_verified_downstream": 79,
+    "tba-approval-verifier:allow": 94,
+    "tba-approval-verifier:deny": 94,
+    "tba-before-effect-enforcer:allow": 94,
+    "tba-before-effect-enforcer:deny": 94,
+    "tba-delegation-enforcer:allow": 94,
+    "tba-delegation-enforcer:deny": 94,
+    "tba-delegation-receipt-verifier:allow": 2,
+    "tba-delegation-receipt-verifier:deny": 2,
+    "tba-non-revocation-status:allow": 94,
+    "tba-non-revocation-status:deny": 188,
+    "transaction_tokens_issued": 138
+  },
+  "by_hop": {
+    "1": 2,
+    "2": 150,
+    "3": 2244
+  },
+  "by_path": {
+    "tba-txn-issue": 2,
+    "call > tba-proof-status-check": 40,
+    "call > tba-before-effect-check": 32,
+    "call > tba-delegation-status-check": 32,
+    "call > tba-approval-check": 32,
+    "delegate > tba-receipt-check": 3,
+    "tba-txn-issue > call": 8,
+    "tba-txn-issue > source-exchange": 3,
+    "call > call > tba-proof-status-check": 448,
+    "call > call > tba-before-effect-check": 384,
+    "call > call > tba-delegation-status-check": 384,
+    "call > call > tba-approval-check": 384,
+    "delegate > call > tba-proof-status-check": 36,
+    "delegate > call > tba-before-effect-check": 30,
+    "delegate > call > tba-delegation-status-check": 30,
+    "delegate > call > tba-approval-check": 30,
+    "delegate > delegate > tba-receipt-check": 4,
+    "tba-txn-issue > call > call": 96,
+    "destination-exchange > call > tba-proof-status-check": 36,
+    "destination-exchange > call > tba-before-effect-check": 30,
+    "destination-exchange > call > tba-delegation-status-check": 30,
+    "destination-exchange > call > tba-approval-check": 30,
+    "tba-txn-issue > call > check": 14,
+    "tba-txn-issue > call > tba-proof-status-check": 12,
+    "tba-txn-issue > call > tba-before-effect-check": 10,
+    "tba-txn-issue > call > tba-delegation-status-check": 10,
+    "tba-txn-issue > call > tba-approval-check": 10,
+    "tba-txn-issue > source-exchange > destination-exchange": 4,
+    "check > call > tba-proof-status-check": 64,
+    "check > call > tba-before-effect-check": 56,
+    "check > call > tba-delegation-status-check": 56,
+    "check > call > tba-approval-check": 56
+  },
+  "by_first_specialized_role": {
+    "tba-transaction-token-issuer": 169,
+    "tba-non-revocation-status": 624,
+    "tba-before-effect-enforcer": 532,
+    "tba-delegation-enforcer": 532,
+    "tba-approval-verifier": 532,
+    "tba-delegation-receipt-verifier": 7
+  },
+  "observed_results": {
+    "transaction-token-issued": 1,
+    "transaction-token-request-refused": 31,
+    "current-non-revocation-proof-accepted": 94,
+    "peer-identity-refused": 668,
+    "operation-scope-refused": 668,
+    "issuer-revocation-refused": 94,
+    "holder-self-revocation-refused": 94,
+    "fresh-authority-accepted-before-effect": 94,
+    "revocation-before-effect-refused": 188,
+    "current-delegation-accepted-before-effect": 94,
+    "matching-approval-display-accepted": 94,
+    "approval-display-mismatch-refused": 94,
+    "narrowed-receipt-accepted": 2,
+    "delegation-widens-parent-scope": 27,
+    "invalid-delegation-receipt-refused": 2,
+    "operation-authorized": 18,
+    "destination-authorization-grant-issued": 1,
+    "source-transaction-token-refused": 2,
+    "authorization-grant-refused": 25,
+    "fresh-status-accepted": 2,
+    "revoked-status-refused": 34,
+    "stale-status-refused": 34,
+    "unavailable-status-refused": 34,
+    "destination-access-token-issued": 1
+  },
+  "writes": {
+    "0": 2000,
+    "1": 396
+  }
+}

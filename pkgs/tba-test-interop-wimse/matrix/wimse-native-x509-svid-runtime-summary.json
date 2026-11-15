@@ -1,0 +1,18 @@
+{
+  "required": 6261,
+  "counts": {
+    "passed": 6261
+  },
+  "complete": true,
+  "by_hop": {
+    "1": {
+      "passed": 73
+    },
+    "2": {
+      "passed": 455
+    },
+    "3": {
+      "passed": 5733
+    }
+  }
+}

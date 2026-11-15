@@ -1,0 +1,26 @@
+{
+  "native": {
+    "passed": 16710
+  },
+  "native_by_hop": {
+    "1": {
+      "passed": 158
+    },
+    "2": {
+      "passed": 928
+    },
+    "3": {
+      "passed": 15624
+    }
+  },
+  "existing_peer_final": {
+    "passed": 23408
+  },
+  "existing_peer_first_attempt": {
+    "failed": 4075,
+    "passed": 19333
+  },
+  "existing_peer_retry": {
+    "passed": 4075
+  }
+}
