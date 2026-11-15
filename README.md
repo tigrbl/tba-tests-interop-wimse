@@ -22,4 +22,9 @@ An expansion with a different peer snapshot can produce different runtime IDs. K
 the frozen manifest and runtime evidence together and use the supplied blocker
 and batch reports to reconcile logical cases across pin changes.
 
-The core wheel installs independently. For the native fixtures, download the interop wheel and the TbA runtime wheels from the same GitHub release into one directory, then install with `uv pip install --find-links . 'tba_test_interop_wimse-0.4.0.dev2-py3-none-any.whl[wic,wpt,spiffe-wic]'`. The runtime wheels supply the source revisions required by the fixtures.
+The core wheel installs independently. Download it from a successful
+[Build interop distribution run](https://github.com/tigrbl/tba-test-interop-wimse/actions/workflows/build.yml).
+To install the native fixtures before all their pinned TbA dependencies are
+available on PyPI, build the missing wheels from the matching TbA source
+revision and place them beside the interop wheel. Then install with
+`uv pip install --find-links . 'tba_test_interop_wimse-0.4.0.dev2-py3-none-any.whl[wic,wpt,spiffe-wic]'`.
