@@ -1,5 +1,6 @@
 """Collect one independently reportable pytest item per peer execution."""
 
+import gzip
 import json
 import os
 from pathlib import Path
@@ -61,13 +62,16 @@ if HOP_PATH and SELECTED_ID and not SELECTED_TYPED_ID:
 @lru_cache(maxsize=1)
 def execution_inventory():
     snapshot = os.getenv("TBA_WIMSE_PEER_SNAPSHOT")
+    frozen_manifest = os.getenv("TBA_WIMSE_FROZEN_MANIFEST")
+    if frozen_manifest and not (EXPANDED and NATIVE):
+        raise pytest.UsageError("A frozen manifest requires expanded native collection")
     if (SELECTED_TYPED_ID or HOP_PATH) and not EXPANDED:
         raise pytest.UsageError("Selecting typed hops requires TBA_WIMSE_EXPANDED=1")
     if EXPANDED and not snapshot:
         raise pytest.UsageError("TBA_WIMSE_EXPANDED=1 requires TBA_WIMSE_PEER_SNAPSHOT")
     peers = json.loads(Path(snapshot).read_text(encoding="utf-8"))["peers"] if snapshot else None
     matrix = generate_matrix(peers=peers)
-    if peers is not None and SPIFFE_PEER_RUN not in {"teleport", "mintid"}:
+    if peers is not None and not frozen_manifest and SPIFFE_PEER_RUN not in {"teleport", "mintid"}:
         def candidate_key(row):
             return row["scenario_id"], tuple(
                 (pair["caller"]["implementation"], pair["receiver"]["implementation"])
@@ -82,6 +86,14 @@ def execution_inventory():
             raise ValueError("Qualification snapshot changed the candidate inventory")
     if EXPANDED:
         plan = expanded_plan(peers, include_candidates=True, include_native=NATIVE, include_executions=True)
+        if frozen_manifest:
+            with gzip.open(frozen_manifest, "rt", encoding="utf-8") as stream:
+                frozen = json.load(stream)
+            for group in ("workload_executions", "planned_executions"):
+                expected = sorted(row["id"] for row in frozen[group])
+                actual = sorted(row["id"] for row in plan[group])
+                if actual != expected or len(actual) != len(set(actual)):
+                    raise ValueError(f"Qualification snapshot differs from frozen {group}")
         if SPIFFE_SUPPORT:
             plan["workload_executions"] = []
             plan["planned_executions"] = spiffe_support_rows(plan, SPIFFE_SUPPORT)
