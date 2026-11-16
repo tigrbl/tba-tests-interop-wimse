@@ -141,8 +141,11 @@ def record_junit(suite, row, observation):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    for name in ("snapshot", "mapping", "runtime", "authgent-checkout", "authgent-python", "cred-checkout", "output"):
+    for name in ("snapshot", "mapping", "runtime", "authgent-checkout", "cred-checkout", "output"):
         parser.add_argument(f"--{name}", required=True, type=lambda value: Path(value).resolve())
+    # On Linux the venv executable is a symlink. Preserve its path so Python
+    # can discover the venv's pyvenv.cfg and installed Authgent distribution.
+    parser.add_argument("--authgent-python", required=True, type=lambda value: Path(value).absolute())
     args = parser.parse_args()
 
     rows = matrix_rows(args.mapping, args.runtime)
