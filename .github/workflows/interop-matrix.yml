@@ -194,11 +194,17 @@ jobs:
           else
             echo "Authgent execution failed. See the prepare job log." > .interop/plan/authgent/error.txt
           fi
+      - name: Qualify AgentMaurice in both directions
+        shell: bash
+        run: |
+          bash .github/scripts/fetch-agentmaurice.sh .interop/agentmaurice
+          python "$INTEROP_PACKAGE/tests/ci_agentmaurice.py" --assets .interop/agentmaurice \
+            --output .interop/plan/agentmaurice.json
       - name: Package plan and qualified runtime
         run: |
           tar -czf interop-plan.tgz -C .interop plan
           tar -czf interop-runtime.tgz -C .interop qualification.json qualification.cred native-controls.json wheels \
-            go-spiffe defakto emilia \
+            go-spiffe defakto emilia agentmaurice \
             cofide-bridge wimsey/target/debug/wimsey wimsey/target/debug/tba-wimsey-wpt-bridge
           tar -czf interop-qualification.tgz -C .interop/qualified \
             teleport.json native-controls.json native_baseline_policy native_svid_policy \
@@ -288,6 +294,16 @@ jobs:
           python -m pytest "${options[@]}" -q --tb=short -o junit_family=xunit1 \
             --junitxml=shard-evidence/results.xml "$test_path" \
             2>&1 | tee shard-evidence/pytest.log
+      - name: Execute AgentMaurice bindings
+        if: ${{ !cancelled() }}
+        shell: bash
+        env:
+          SHARD: ${{ matrix.shard }}
+        run: |
+          python "$INTEROP_PACKAGE/tests/ci_agentmaurice.py" --assets .interop/agentmaurice \
+            --plan .interop/plan --shard "$SHARD" --snapshot "$TBA_WIMSE_PEER_SNAPSHOT" \
+            --qualification .interop/plan/agentmaurice.json --output shard-evidence/agentmaurice.jsonl \
+            2>&1 | tee shard-evidence/agentmaurice.log
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: ${{ !cancelled() }}
         with:

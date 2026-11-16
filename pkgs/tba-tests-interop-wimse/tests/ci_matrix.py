@@ -10,8 +10,12 @@ from pathlib import Path
 from xml.etree.ElementTree import ParseError
 
 from expanded_blockers import case_key, rows
+from tba_tests_interop_wimse.catalog import read_catalog
 from tba_tests_interop_wimse.evidence import audit_pytest_report
+from tba_tests_interop_wimse.hop_runner import hop_mismatches
+from tba_tests_interop_wimse.matrix import expand_scenarios
 from tba_tests_interop_wimse.native_expansion import expanded_plan
+from tba_tests_interop_wimse.observations import Observation, mismatches
 
 
 PUBLISHED_COUNT = 142_844
@@ -33,6 +37,44 @@ def read_inventory(path):
 
 def digest(path):
     return sha256(path.read_bytes()).hexdigest()
+
+
+def has_agentmaurice(row):
+    if "pairs" in row:
+        return any(endpoint["implementation"] == "agentmaurice"
+                   for pair in row["pairs"].values() for endpoint in pair.values())
+    return any(pin[0] == "agentmaurice" for hop in row["hops"]
+               for role, pin in hop.items() if role in {"caller_pin", "receiver_pin"})
+
+
+def audit_agentmaurice(report, expected, qualification, scenarios):
+    attempts = {}
+    with report.open(encoding="utf-8") as source:
+        for line in source:
+            record = json.loads(line)
+            key = record["execution_id"]
+            published, row = expected[key]
+            status = record["status"]
+            if (key in attempts or record["published_id"] != published
+                    or record["binary_sha256"] != qualification["binary_sha256"]
+                    or record["configuration"] != qualification["configuration"]
+                    or status not in {"passed", "failed", "blocked"}):
+                raise ValueError(f"Invalid AgentMaurice result association: {key}")
+            if status == "passed":
+                observation = record["observation"]
+                if "pairs" in row:
+                    observed = Observation(**{**observation, "events": tuple(observation["events"])})
+                    errors = mismatches(scenarios[row["scenario_id"]], observed)
+                else:
+                    errors = hop_mismatches(row, observation)
+                if errors:
+                    raise ValueError(f"AgentMaurice pass disagrees with the oracle: {key}")
+            elif not record["reason"]:
+                raise ValueError(f"Missing AgentMaurice failure or blocker reason: {key}")
+            attempts[key] = {"status": status, "attempts": [record]}
+    if attempts.keys() != expected.keys():
+        raise ValueError(f"AgentMaurice report missing {len(expected.keys() - attempts.keys())} selected IDs")
+    return attempts
 
 
 def prepare(args):
@@ -105,6 +147,14 @@ def aggregate(args):
     blocked = Counter()
     reports = {}
     peer_results = {}
+    agentmaurice_counts = Counter()
+    maurice_qualification = args.plan / "agentmaurice.json"
+    if maurice_qualification.exists():
+        maurice_pin = json.loads(maurice_qualification.read_text(encoding="utf-8"))
+        scenarios = {case["id"]: case for case in expand_scenarios(
+            read_catalog("scenarios.toml"), read_catalog("factors.toml"), read_catalog("exclusions.toml")
+        )}
+        reports["agentmaurice-qualification"] = digest(maurice_qualification)
     authgent_report = args.plan / "authgent/results.xml"
     if (args.plan / "authgent/error.txt").exists():
         errors.append("Authgent runtime did not produce a complete report; see the plan artifact")
@@ -125,6 +175,17 @@ def aggregate(args):
         writer.writerow(("execution_id", "runtime_id", "shard", "status", "reason", "evidence"))
         for index, pairs in enumerate(shards):
             report = args.reports / f"interop-shard-{index}" / "results.xml"
+            maurice_results = {}
+            if maurice_qualification.exists():
+                expected_maurice = {current: (canonical, runtime[current]) for canonical, current in pairs
+                                    if has_agentmaurice(runtime[current])}
+                if expected_maurice:
+                    peer_report = report.with_name("agentmaurice.jsonl")
+                    try:
+                        maurice_results = audit_agentmaurice(peer_report, expected_maurice, maurice_pin, scenarios)
+                        reports[f"agentmaurice-{index}"] = digest(peer_report)
+                    except (OSError, ValueError, KeyError) as error:
+                        errors.append(f"AgentMaurice shard {index}: {error}")
             try:
                 audit = audit_pytest_report(
                     [runtime[current] for _, current in pairs], report, allow_unrecorded=True,
@@ -141,6 +202,10 @@ def aggregate(args):
                 if current in peer_results and result["status"] in {"blocked", "not-run"}:
                     result = peer_results[current]
                     evidence = "authgent/results.xml"
+                if current in maurice_results:
+                    result = maurice_results[current]
+                    evidence = f"interop-shard-{index}/agentmaurice.jsonl"
+                    agentmaurice_counts[result["status"]] += 1
                 status = result["status"]
                 attempts = result["attempts"]
                 reason = attempts[-1].get("reason", "") if attempts else "No validated JUnit result"
@@ -154,6 +219,8 @@ def aggregate(args):
                "counts": {status: counts[status] for status in STATUSES}, "errors": errors,
                "complete": not errors and not counts["not-run"],
                "blocked_reasons": dict(blocked.most_common())}
+    if maurice_qualification.exists():
+        summary["agentmaurice_counts"] = dict(agentmaurice_counts)
     (args.output / "summary.json").write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
     provenance = {**scope, "mapping_sha256": digest(args.plan / "mapping.json.gz"),
                   "runtime_sha256": digest(args.plan / "runtime.json.gz"),
@@ -162,6 +229,9 @@ def aggregate(args):
     lines = ["## WIMSE interoperability", "", f"Selected published cases: **{len(expected):,}** across {len(shards)} shards.",
              "", "| Outcome | Cases |", "| --- | ---: |"]
     lines.extend(f"| {status} | {counts[status]:,} |" for status in STATUSES)
+    if agentmaurice_counts:
+        lines.extend(("", "### AgentMaurice", "",
+                      *[f"- {agentmaurice_counts[status]:,} {status}" for status in ("passed", "failed", "blocked")]))
     if blocked:
         lines.extend(("", "### Most common blockers", "",
                       *[f"- {count:,} — {reason}" for reason, count in blocked.most_common(10)]))
