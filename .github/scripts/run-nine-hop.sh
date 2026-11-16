@@ -60,6 +60,7 @@ capture_pid=$(cat "$scratch/tcpdump.pid")
 grep -q 'listening on lo' "$scratch/capture.log"
 
 touch "$scratch/observations.jsonl"
+capture_end=$(cat /proc/sys/kernel/random/uuid)
 driver_exit=0
 sudo nsenter -t "$pid" -n -- env PATH="$PATH" \
     TBA_NINE_HOP_PEER_ASSETS="$(dirname "$assets")" \
@@ -67,7 +68,18 @@ sudo nsenter -t "$pid" -n -- env PATH="$PATH" \
     TBA_WIMSE_NINE_HOP_COFIDE_BRIDGE="${TBA_WIMSE_NINE_HOP_COFIDE_BRIDGE:-}" \
     timeout 65m "$python_path" "$package/tests/ci_nine_hop_matrix.py" run \
     "$manifest" "$upstream" "$scratch/observations.jsonl" "$shard" "$shards" "$agent" \
+    --capture-end "$capture_end" \
     >"$scratch/driver.log" 2>&1 || driver_exit=$?
+if [[ "$driver_exit" == 0 ]]; then
+    for _ in $(seq 1 15); do
+        if sudo grep -aFq -- "$capture_end" "$scratch/chain.pcap"; then break; fi
+        sleep 1
+    done
+    if ! sudo grep -aFq -- "$capture_end" "$scratch/chain.pcap"; then
+        printf '%s\n' 'End-of-shard marker did not reach the capture'
+        driver_exit=1
+    fi
+fi
 sudo kill -INT "$capture_pid"
 wait "$capture_job"
 capture_pid=

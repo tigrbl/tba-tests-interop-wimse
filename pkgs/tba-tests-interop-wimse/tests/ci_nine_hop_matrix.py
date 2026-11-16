@@ -1,8 +1,9 @@
 """Execute and reconcile sharded nine-hop assignments on hosted Ubuntu."""
 from argparse import ArgumentParser
 from collections import Counter
-from contextlib import ExitStack
+from contextlib import ExitStack, closing
 import csv
+from http.client import HTTPConnection
 from itertools import product
 import json
 from pathlib import Path
@@ -140,6 +141,12 @@ def execute(args, stack):
                           "uses_maurice_ingress": uses_maurice, "problems": problems}
             out.write(json.dumps({"execution_id": execution_id, **result}) + "\n")
             out.flush()
+        if capture_end := getattr(args, "capture_end", None):
+            # The marker traverses the same interface after the final response.
+            # The controller waits for its bytes on disk before stopping tcpdump.
+            with closing(HTTPConnection("127.0.0.1", 5051, timeout=10)) as connection:
+                connection.request("GET", "/health", headers={"X-Nine-Hop-Capture-End": capture_end})
+                connection.getresponse().read()
 
 
 def audit_shard(args):
@@ -176,7 +183,12 @@ def audit_shard(args):
                     observed = check_case(wire, requests.get(execution_id, {}), responses, scenario["success_oracle"], routes)
                     result["statuses"] = observed["statuses"]
                     result["problems"].extend(observed["problems"])
-                    result["status"] = "fail" if result["problems"] else "pass"
+                    incomplete = len(observed["statuses"]) != len(routes) or 0 in observed["statuses"]
+                    if result["status"] == "observed" and incomplete:
+                        result["status"] = "blocked"
+                        result["problems"].append("Runtime completed with incomplete wire evidence")
+                    else:
+                        result["status"] = "fail" if result["problems"] else "pass"
             out.write(json.dumps(result) + "\n")
 
 
@@ -260,6 +272,7 @@ def main():
         command.add_argument("shard", type=int)
         command.add_argument("shards", type=int)
     run.add_argument("agent")
+    run.add_argument("--capture-end")
     audit.add_argument("capture", type=Path)
     audit.add_argument("results", type=Path)
     merge.add_argument("shard_dir", type=Path)
