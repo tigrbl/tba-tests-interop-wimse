@@ -41,6 +41,7 @@ jobs:
     timeout-minutes: 45
     outputs:
       shards: ${{ steps.plan.outputs.shards }}
+      authgent-shards: ${{ steps.plan.outputs.authgent-shards }}
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
@@ -62,12 +63,6 @@ jobs:
           repository: cofide/wimse-s2s-httpsig-poc
           ref: 7984a60105002dc65b31e9cd08572cd5d10ed9d6
           path: .interop/cofide
-          persist-credentials: false
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
-        with:
-          repository: authgent/authgent
-          ref: 8341cf932c9816dc666f2a6577b6776bd6f3b978
-          path: .interop/authgent
           persist-credentials: false
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
@@ -136,6 +131,7 @@ jobs:
           cp -r "$INTEROP_PACKAGE/tests/support/emilia_bridge" .interop/emilia
           npm ci --prefix .interop/defakto --ignore-scripts
           npm ci --prefix .interop/emilia --ignore-scripts
+          bash .github/scripts/fetch-agentmaurice.sh .interop/agentmaurice
       - name: Qualify peer fixtures
         env:
           RUSTUP_TOOLCHAIN: '1.97.0'
@@ -146,7 +142,10 @@ jobs:
           TBA_WIMSE_COMBINED_SIGNATURE_WIMSE: '1'
           TBA_WIMSE_COMBINED_WPT: '1'
           TBA_WIMSE_COMBINED_WPT_WIMSE: '1'
-        run: python -m support.qualification_overlay
+        run: |
+          python -m support.qualification_overlay
+          python "$INTEROP_PACKAGE/tests/ci_agentmaurice.py" --assets .interop/agentmaurice \
+            --output .interop/agentmaurice-qualification.json
       - name: Qualify native workload directions and issuers
         run: |
           python "$INTEROP_PACKAGE/tests/qualify_native_runtime.py" \
@@ -177,34 +176,13 @@ jobs:
             --manifest "$INTEROP_PACKAGE/matrix/wimse-interop-all-tba-executions.json.gz" \
             --snapshot "$TBA_WIMSE_PEER_SNAPSHOT" --shards "$SHARDS" --output .interop/plan "${options[@]}")
           printf 'shards=%s\n' "$shards" >> "$GITHUB_OUTPUT"
-      - name: Run pinned Authgent issuance and handoff cases
-        shell: bash
-        run: |
-          mkdir .interop/plan/authgent
-          if python -m venv .interop/authgent-venv \
-            && .interop/authgent-venv/bin/python -m pip install --no-input ./.interop/authgent/server \
-            && python "$INTEROP_PACKAGE/tests/run_authgent_matrix.py" \
-              --snapshot "$TBA_WIMSE_PEER_SNAPSHOT" --mapping .interop/plan/mapping.json.gz \
-              --runtime .interop/plan/runtime.json.gz --authgent-checkout .interop/authgent \
-              --authgent-python .interop/authgent-venv/bin/python --cred-checkout .interop/cred \
-              --output .interop/authgent-run; then
-            if [[ -f .interop/authgent-run/results.xml ]]; then
-              cp .interop/authgent-run/{results.xml,summary.json,per-id.jsonl} .interop/plan/authgent/
-            fi
-          else
-            echo "Authgent execution failed. See the prepare job log." > .interop/plan/authgent/error.txt
-          fi
-      - name: Qualify AgentMaurice in both directions
-        shell: bash
-        run: |
-          bash .github/scripts/fetch-agentmaurice.sh .interop/agentmaurice
-          python "$INTEROP_PACKAGE/tests/ci_agentmaurice.py" --assets .interop/agentmaurice \
-            --output .interop/plan/agentmaurice.json
+          printf 'authgent-shards=%s\n' "$(cat .interop/plan/authgent-shards.json)" >> "$GITHUB_OUTPUT"
+          cp .interop/agentmaurice-qualification.json .interop/plan/agentmaurice.json
       - name: Package plan and qualified runtime
         run: |
           tar -czf interop-plan.tgz -C .interop plan
           tar -czf interop-runtime.tgz -C .interop qualification.json qualification.cred native-controls.json wheels \
-            go-spiffe defakto emilia agentmaurice \
+            go-spiffe defakto emilia agentmaurice cred-tooling \
             cofide-bridge wimsey/target/debug/wimsey wimsey/target/debug/tba-wimsey-wpt-bridge
           tar -czf interop-qualification.tgz -C .interop/qualified \
             teleport.json native-controls.json native_baseline_policy native_svid_policy \
@@ -253,6 +231,20 @@ jobs:
           ref: 56b070582f3e380c5006630698fb4ca808c08b04
           path: .interop/wimsey
           persist-credentials: false
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        if: ${{ contains(fromJSON(needs.prepare.outputs.authgent-shards), matrix.shard) }}
+        with:
+          repository: authgent/authgent
+          ref: 8341cf932c9816dc666f2a6577b6776bd6f3b978
+          path: .interop/authgent
+          persist-credentials: false
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        if: ${{ contains(fromJSON(needs.prepare.outputs.authgent-shards), matrix.shard) }}
+        with:
+          repository: cred-ninja/sdk
+          ref: 586e1a76f487c2376e0ba0a4687bb2de8d3eb588
+          path: .interop/cred
+          persist-credentials: false
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: '3.12.13'
@@ -269,6 +261,7 @@ jobs:
         shell: bash
         env:
           SHARD: ${{ matrix.shard }}
+          RUN_AUTHGENT: ${{ contains(fromJSON(needs.prepare.outputs.authgent-shards), matrix.shard) }}
           EXECUTION_ID: ${{ inputs.execution_id }}
           TBA_WIMSE_EXPANDED: '1'
           TBA_WIMSE_INCLUDE_NATIVE: '1'
@@ -279,7 +272,6 @@ jobs:
           tar -xzf interop-runtime.tgz -C .interop
           python -m pip install --no-input --no-index --no-deps .interop/wheels/*.whl
           python -m pip check
-          bash .github/scripts/start-teleport.sh
           export TBA_WIMSE_EXECUTION_SELECTION=".interop/plan/shard-$SHARD.json"
           test_path="$INTEROP_PACKAGE/tests/peer/test_candidate_executions.py"
           options=(-n 2 --dist load)
@@ -291,19 +283,28 @@ jobs:
               test_path+="::test_peer_execution"
             fi
           fi
-          python -m pytest "${options[@]}" -q --tb=short -o junit_family=xunit1 \
+          status=0
+          bash .github/scripts/start-teleport.sh &&
+            python -m pytest "${options[@]}" -q --tb=short -o junit_family=xunit1 \
             --junitxml=shard-evidence/results.xml "$test_path" \
-            2>&1 | tee shard-evidence/pytest.log
-      - name: Execute AgentMaurice bindings
-        if: ${{ !cancelled() }}
-        shell: bash
-        env:
-          SHARD: ${{ matrix.shard }}
-        run: |
+            2>&1 | tee shard-evidence/pytest.log || status=$?
+          if [[ "$RUN_AUTHGENT" == true ]]; then
+            ln -s "$PWD/.interop/cred-tooling/node_modules" .interop/cred/node_modules &&
+              python -m venv .interop/authgent-venv &&
+              .interop/authgent-venv/bin/python -m pip install --no-input ./.interop/authgent/server &&
+              python "$INTEROP_PACKAGE/tests/run_authgent_matrix.py" \
+                --snapshot "$TBA_WIMSE_PEER_SNAPSHOT" --mapping .interop/plan/mapping.json.gz \
+                --runtime .interop/plan/runtime.json.gz --authgent-checkout .interop/authgent \
+                --authgent-python .interop/authgent-venv/bin/python --cred-checkout .interop/cred \
+                --shard "$SHARD" --output .interop/authgent-run &&
+              mkdir -p shard-evidence/authgent &&
+              cp .interop/authgent-run/{results.xml,summary.json,per-id.jsonl} shard-evidence/authgent/ || status=$?
+          fi
           python "$INTEROP_PACKAGE/tests/ci_agentmaurice.py" --assets .interop/agentmaurice \
             --plan .interop/plan --shard "$SHARD" --snapshot "$TBA_WIMSE_PEER_SNAPSHOT" \
             --qualification .interop/plan/agentmaurice.json --output shard-evidence/agentmaurice.jsonl \
-            2>&1 | tee shard-evidence/agentmaurice.log
+            2>&1 | tee shard-evidence/agentmaurice.log || status=$?
+          exit "$status"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: ${{ !cancelled() }}
         with:

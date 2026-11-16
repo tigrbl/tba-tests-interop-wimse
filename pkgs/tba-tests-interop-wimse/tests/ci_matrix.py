@@ -47,6 +47,10 @@ def has_agentmaurice(row):
                for role, pin in hop.items() if role in {"caller_pin", "receiver_pin"})
 
 
+def has_authgent(row):
+    return "pairs" not in row and row["hops"][0].get("support") == "authgent"
+
+
 def audit_agentmaurice(report, expected, qualification, scenarios):
     attempts = {}
     with report.open(encoding="utf-8") as source:
@@ -111,6 +115,10 @@ def prepare(args):
         )
     with gzip.open(args.output / "mapping.json.gz", "wt", encoding="utf-8") as stream:
         json.dump(shards, stream)
+    authgent_ids = {row["id"] for row in inventory["planned_executions"] if has_authgent(row)}
+    (args.output / "authgent-shards.json").write_text(json.dumps([
+        index for index, shard in enumerate(shards) if any(current in authgent_ids for _, current in shard)
+    ]), encoding="utf-8")
     (args.output / "scope.json").write_text(json.dumps({
         "execution_id": args.execution_id,
         "published_manifest_sha256": digest(args.manifest),
@@ -146,7 +154,6 @@ def aggregate(args):
     errors = []
     blocked = Counter()
     reports = {}
-    peer_results = {}
     agentmaurice_counts = Counter()
     maurice_qualification = args.plan / "agentmaurice.json"
     if maurice_qualification.exists():
@@ -155,26 +162,24 @@ def aggregate(args):
             read_catalog("scenarios.toml"), read_catalog("factors.toml"), read_catalog("exclusions.toml")
         )}
         reports["agentmaurice-qualification"] = digest(maurice_qualification)
-    authgent_report = args.plan / "authgent/results.xml"
-    if (args.plan / "authgent/error.txt").exists():
-        errors.append("Authgent runtime did not produce a complete report; see the plan artifact")
-    if authgent_report.exists():
-        authgent_rows = [row for _, current in pairs if (row := runtime[current]).get("hops")
-                         and isinstance(row["hops"], list) and row["hops"][0].get("support") == "authgent"]
-        try:
-            authgent = audit_pytest_report(authgent_rows, authgent_report)
-            if not authgent_rows or not authgent["complete"]:
-                raise ValueError("Authgent evidence does not cover the selected Authgent runtime rows")
-            peer_results.update(authgent["results"])
-            reports["authgent"] = digest(authgent_report)
-        except (OSError, ValueError, KeyError, ParseError) as error:
-            errors.append(f"Authgent: {error}")
     args.output.mkdir(parents=True, exist_ok=True)
     with gzip.open(args.output / "results.csv.gz", "wt", encoding="utf-8", newline="") as stream:
         writer = csv.writer(stream)
         writer.writerow(("execution_id", "runtime_id", "shard", "status", "reason", "evidence"))
         for index, pairs in enumerate(shards):
             report = args.reports / f"interop-shard-{index}" / "results.xml"
+            authgent_results = {}
+            authgent_rows = [runtime[current] for _, current in pairs if has_authgent(runtime[current])]
+            if authgent_rows:
+                authgent_report = report.parent / "authgent/results.xml"
+                try:
+                    authgent = audit_pytest_report(authgent_rows, authgent_report)
+                    if not authgent["complete"]:
+                        raise ValueError("Authgent evidence does not cover the selected Authgent runtime rows")
+                    authgent_results = authgent["results"]
+                    reports[f"authgent-{index}"] = digest(authgent_report)
+                except (OSError, ValueError, KeyError, ParseError) as error:
+                    errors.append(f"Authgent shard {index}: {error}")
             maurice_results = {}
             if maurice_qualification.exists():
                 expected_maurice = {current: (canonical, runtime[current]) for canonical, current in pairs
@@ -199,9 +204,9 @@ def aggregate(args):
             for canonical, current in pairs:
                 result = audit["results"].get(current, {"status": "not-run", "attempts": []})
                 evidence = f"interop-shard-{index}/results.xml" if result["attempts"] else ""
-                if current in peer_results and result["status"] in {"blocked", "not-run"}:
-                    result = peer_results[current]
-                    evidence = "authgent/results.xml"
+                if current in authgent_results and result["status"] in {"blocked", "not-run"}:
+                    result = authgent_results[current]
+                    evidence = f"interop-shard-{index}/authgent/results.xml"
                 if current in maurice_results:
                     result = maurice_results[current]
                     evidence = f"interop-shard-{index}/agentmaurice.jsonl"

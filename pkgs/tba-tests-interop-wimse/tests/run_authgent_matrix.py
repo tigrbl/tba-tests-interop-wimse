@@ -27,7 +27,7 @@ from support.typed_workload_chain import TypedWorkloadChain
 from support.wic_fixture import DNS
 
 
-def matrix_rows(mapping, runtime):
+def matrix_rows(mapping, runtime, *, shard=None):
     with gzip.open(runtime, "rt", encoding="utf-8") as stream:
         rows = [row for row in json.load(stream)["planned_executions"]
                 if row["hops"][0].get("support") == "authgent"]
@@ -41,6 +41,10 @@ def matrix_rows(mapping, runtime):
     originals = {runtime_id: original for original, runtime_id in pairs if runtime_id in selected}
     if len(published) == 142_844 and (len(originals) != len(rows) or len(rows) != 41):
         raise ValueError("Expected exactly 41 distinct published Authgent IDs and corresponding runtime rows")
+    if shard is not None:
+        if not 0 <= shard < len(shards):
+            raise ValueError(f"Invalid Authgent shard {shard}")
+        originals = {runtime_id: original for original, runtime_id in shards[shard] if runtime_id in originals}
     return [(originals[row["id"]], row) for row in rows if row["id"] in originals]
 
 
@@ -146,9 +150,10 @@ def main():
     # On Linux the venv executable is a symlink. Preserve its path so Python
     # can discover the venv's pyvenv.cfg and installed Authgent distribution.
     parser.add_argument("--authgent-python", required=True, type=lambda value: Path(value).absolute())
+    parser.add_argument("--shard", type=int, help="Execute only Authgent IDs assigned to this shard")
     args = parser.parse_args()
 
-    rows = matrix_rows(args.mapping, args.runtime)
+    rows = matrix_rows(args.mapping, args.runtime, shard=args.shard)
     if not rows:
         return
     snapshot = json.loads(args.snapshot.read_text(encoding="utf-8"))
