@@ -27,6 +27,8 @@ selects the trusted keys, expected token types, claims and audiences. TbA's
 WIMSE signature routines construct and verify covered components, authenticate
 the WIT and reserve the proof nonce. The public signature wrapper is bodyless,
 so this fixture calls the pinned internal routines with explicit body coverage.
+The TbA receiving adapter also verifies Cofide's authority-bound signature form
+using the configured audience's exact Host and signed derived components.
 The TbA JOSE provider signs and verifies the compact JWTs. The pinned signer
 supports EdDSA. The adapter adds one disposable Ed25519 key per issuer to the
 fixture's in-memory trust bundles alongside its existing ES256 keys.

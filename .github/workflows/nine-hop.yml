@@ -102,7 +102,7 @@ jobs:
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: '3.12.13'
-      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5ba9c38 # v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: '24.18.0'
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
@@ -117,7 +117,7 @@ jobs:
           tar -xzf .interop/runtime/nine-hop-runtime.tgz -C .interop/assets
           python -m pip install --no-input --no-index --no-deps .interop/assets/wheels/*.whl
           python -m pip check
-      - name: Execute ninety-four possible directed handoffs across the assigned flows
+      - name: Execute the assigned nine-hop cases
         run: |
           mkdir -m 700 "$RUNNER_TEMP/nine-hop"
           export TBA_WIMSE_CRED_CHECKOUT="$GITHUB_WORKSPACE/.interop/cred"

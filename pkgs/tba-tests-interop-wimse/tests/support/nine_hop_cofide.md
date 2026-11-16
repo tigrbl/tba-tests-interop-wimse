@@ -76,3 +76,15 @@ accepted Cofide's actual wire bytes by checking Host against
 `expected_binding="wimse"`, and `required_algorithm="ES256"` in
 `_authenticate_signature`. Any receiving peer should own its verification;
 routing a reference receiver through Cofide would not qualify that handoff.
+
+## Local observations
+
+| Assignment | HTTP outcomes in request order |
+| --- | --- |
+| Cofide ingress; remaining roles reference | Nine 200 responses |
+| Cofide driver and ingress; remaining roles reference | 200, 200, 400 (source exchange rejected the signature) |
+| Cofide ingress and Coordinator; remaining roles reference | Seven requests; Research rejected the signature and Coordinator propagated HTTP 400 |
+| Cofide driver, ingress and Coordinator; native TbA at source exchange, Research and File Tool | Nine 200 responses with the TbA authority profile configured in a disposable local runner. |
+
+These are loopback client observations. Hosted qualification still needs the
+shared runner's capture audit of all nine handoffs.

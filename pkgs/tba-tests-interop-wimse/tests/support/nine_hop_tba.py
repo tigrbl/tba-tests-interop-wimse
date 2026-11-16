@@ -166,11 +166,24 @@ class _Bindings:
                          covered.get("content-type") == "application/json" and
                          covered.get("content-digest") == _json_digest(body),
                          "request content digest mismatch")
+                signature_input = covered.get("signature-input", "")
+                if ';keyid="wimse"' in signature_input:
+                    authority = urlsplit(expected_aud).netloc
+                    hosts = [value for name, value in pairs if name.lower() == "host"]
+                    _require(hosts == [authority], "signed Cofide authority mismatch")
+                    profile = {
+                        "authority": authority, "derived": ("@method", "@request-target", "@authority"),
+                        "binding": "keyid", "expected_binding": "wimse", "required_algorithm": "ES256",
+                    }
+                else:
+                    profile = {
+                        "authority": None, "derived": FIELDS,
+                        "binding": "wimse-aud", "expected_binding": expected_aud,
+                    }
                 subject = _authenticate_signature(
                     pairs, method=method, path=path_and_query, now=instant,
                     trust_by_domain=trusted, replay_store=self.replay,
-                    verify_credential=verify_wit, authority=None, derived=FIELDS,
-                    binding="wimse-aud", expected_binding=expected_aud,
+                    verify_credential=verify_wit, **profile,
                 )
                 mechanism = "http-sig"
             self.subject.set(subject)
