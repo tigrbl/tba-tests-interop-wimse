@@ -17,6 +17,7 @@ OPERATION = "mintid-check"
 BRIDGE = Path(__file__).with_name("mintid_bridge.py")
 RUNTIME_BRIDGE = "/tbafixture/mintid_bridge.py"
 DECISION_TIMEOUT = 480
+HOSTED_SERVICES = ("idchaind", "issuer-agent", "verifier", "selfrevoke-relay")
 REVOCATIONS = {
     "issuer-revocation-refused": "issuer",
     "holder-self-revocation-refused": "kill_switch",
@@ -35,6 +36,21 @@ def driver_fingerprint(container):
     if mounted != digest:
         raise ValueError("MintID driver bridge differs from the local test source")
     return {"driver_image": image, "bridge_sha256": digest}
+
+
+def hosted_service_images():
+    names = [f"tba-interop-mintid-{service}-1" for service in HOSTED_SERVICES]
+    result = subprocess.run(
+        ["docker", "inspect", "--format", "{{.State.Running}} {{.Image}}", *names],
+        text=True, capture_output=True, timeout=20, check=True,
+    )
+    images = {}
+    for service, record in zip(HOSTED_SERVICES, result.stdout.splitlines(), strict=True):
+        running, image = record.split()
+        if running != "true":
+            raise ValueError(f"MintID {service} is not running")
+        images[service] = image
+    return images
 
 
 def validate_decision(result, path, actor):

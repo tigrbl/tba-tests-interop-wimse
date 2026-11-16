@@ -226,11 +226,13 @@ def typed_hop_adapters(request, peer_snapshot, tmp_path_factory):
             adapters[(OPERATION, "call")] = flow
             adapters[(OPERATION, "call", "call")] = flow
         if mintid := peer_snapshot.get("mintid_qualification"):
-            from mintid_endpoint import OPERATION, MintIDBindings, driver_fingerprint
+            from mintid_endpoint import OPERATION, MintIDBindings, driver_fingerprint, hosted_service_images
 
             container = os.environ["TBA_WIMSE_MINTID_CONTAINER"]
             if any(mintid.get(key) != value for key, value in driver_fingerprint(container).items()):
                 pytest.fail("MintID driver image or bridge differs from the qualified snapshot")
+            if (images := mintid.get("hosted_service_images")) and hosted_service_images() != images:
+                pytest.fail("MintID service images differ from the qualified snapshot")
             flow = TypedServiceFlow(adapters[("call", "call", "call")], MintIDBindings,
                                     agent_factory=lambda: container)
             adapters[("call", OPERATION)] = flow

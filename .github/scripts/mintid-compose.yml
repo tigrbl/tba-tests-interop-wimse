@@ -1,0 +1,19 @@
+services:
+  idchaind:
+    ports: !reset []
+    volumes: !override
+      - chain-home:/home/idchaind
+  issuer-agent:
+    user: "0:0"
+    ports: !reset []
+  verifier:
+    user: "0:0"
+    ports: !reset []
+  selfrevoke-relay:
+    user: "0:0"
+    ports: !reset []
+networks:
+  default:
+    internal: true
+volumes:
+  chain-home:

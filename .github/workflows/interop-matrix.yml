@@ -34,11 +34,12 @@ env:
   TBA_WIMSE_DEFAKTO_BRIDGE: .interop/defakto/verify.mjs
   TBA_WIMSE_EMILIA_BRIDGE: .interop/emilia/check.mjs
   TBA_WIMSE_TELEPORT_CONTAINER: tba-interop-teleport
+  TBA_WIMSE_MINTID_CONTAINER: tba-interop-mintid-driver
 
 jobs:
   prepare:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 70
     outputs:
       shards: ${{ steps.plan.outputs.shards }}
       authgent-shards: ${{ steps.plan.outputs.authgent-shards }}
@@ -132,6 +133,7 @@ jobs:
           npm ci --prefix .interop/defakto --ignore-scripts
           npm ci --prefix .interop/emilia --ignore-scripts
           bash .github/scripts/fetch-agentmaurice.sh .interop/agentmaurice
+          bash .github/scripts/build-mintid.sh .interop/mintid
       - name: Qualify peer fixtures
         env:
           RUSTUP_TOOLCHAIN: '1.97.0'
@@ -163,6 +165,10 @@ jobs:
             --output .interop/qualified/teleport.json
           cp .interop/qualified/teleport.json "$TBA_WIMSE_PEER_SNAPSHOT"
           cp .interop/qualified/native-controls.json .interop/native-controls.json
+          bash .github/scripts/start-mintid.sh .interop/mintid "$INTEROP_PACKAGE/tests/mintid_bridge.py"
+          python "$INTEROP_PACKAGE/tests/qualify_mintid_runtime.py" \
+            --snapshot "$TBA_WIMSE_PEER_SNAPSHOT" --container "$TBA_WIMSE_MINTID_CONTAINER"
+          cp "$TBA_WIMSE_PEER_SNAPSHOT" .interop/qualified/mintid.json
       - name: Partition the published execution inventory
         id: plan
         shell: bash
@@ -185,13 +191,23 @@ jobs:
             go-spiffe defakto emilia agentmaurice cred-tooling \
             cofide-bridge wimsey/target/debug/wimsey wimsey/target/debug/tba-wimsey-wpt-bridge
           tar -czf interop-qualification.tgz -C .interop/qualified \
-            teleport.json native-controls.json native_baseline_policy native_svid_policy \
+            teleport.json mintid.json native-controls.json native_baseline_policy native_svid_policy \
             native_acquisition_qualification native_specialized_acquisition_qualification typed_service_qualification
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: interop-qualification
           path: interop-qualification.tgz
           retention-days: 30
+          overwrite: true
+          if-no-files-found: error
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: mintid-runtime
+          path: |
+            .interop/mintid/images.tar.gz
+            .interop/mintid/vendor.tar.gz
+          retention-days: 7
+          compression-level: 0
           overwrite: true
           if-no-files-found: error
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -257,6 +273,10 @@ jobs:
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: interop-runtime
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: mintid-runtime
+          path: .interop/mintid
       - name: Run selected executions
         shell: bash
         env:
@@ -270,6 +290,10 @@ jobs:
           mkdir -p shard-evidence
           tar -xzf interop-plan.tgz -C .interop
           tar -xzf interop-runtime.tgz -C .interop
+          mkdir .interop/mintid/vendor
+          tar -xzf .interop/mintid/vendor.tar.gz -C .interop/mintid/vendor
+          docker image load --input .interop/mintid/images.tar.gz
+          bash .github/scripts/start-mintid.sh .interop/mintid "$INTEROP_PACKAGE/tests/mintid_bridge.py"
           python -m pip install --no-input --no-index --no-deps .interop/wheels/*.whl
           python -m pip check
           export TBA_WIMSE_EXECUTION_SELECTION=".interop/plan/shard-$SHARD.json"
