@@ -100,6 +100,9 @@ class TypedServiceBindings(StatusFlowServices):
             return lab
         configured = copy(lab)
         configured.issuer = self.acquired_issuer
+        if getattr(configured, "fallback", None) is not None:
+            configured.fallback = copy(configured.fallback)
+            configured.fallback.issuer = self.acquired_issuer
         return configured
 
     def source_transaction(self, actor, fault):
