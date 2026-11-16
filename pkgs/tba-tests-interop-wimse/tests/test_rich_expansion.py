@@ -1,7 +1,10 @@
 import gzip
+import csv
 from itertools import product
 import json
 from pathlib import Path
+
+from ci_nine_hop import report
 
 
 MATRIX = Path(__file__).resolve().parents[1] / "matrix"
@@ -51,3 +54,15 @@ def test_rich_expansion_preserves_baseline_and_materializes_every_named_assignme
     assert len(expanded["planned_executions"]) - len(original["planned_executions"]) - len(observed) == 5_102
     assert sum(map(len, roles.values())) == 27
     assert sum(len(roles[hop["caller"]]) * len(roles[hop["receiver"]]) for hop in scenario["hops"]) == 94
+
+
+def test_reference_observation_is_attributed_to_the_pinned_demo_file_tool(tmp_path):
+    name = "wimse-interop-rich-nine-hop-executions.json.gz"
+    report(MATRIX / name, tmp_path, {"status": "pass"})
+    with (tmp_path / "per-id.csv").open(encoding="utf-8", newline="") as stream:
+        rows = list(csv.DictReader(stream))
+    passed, = [row["execution_id"] for row in rows if row["status"] == "pass"]
+    assert len(rows) == 12_288
+    reference = next(row for row in read_inventory(name)["planned_executions"] if row["id"] == passed)
+    assert reference["hops"][1]["receiver_pin"][0] == "agentmaurice"
+    assert reference["hops"][-1]["receiver_pin"][0] == "ietf127-demo"

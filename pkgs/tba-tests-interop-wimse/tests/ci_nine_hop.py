@@ -39,7 +39,7 @@ def run_reference(upstream, agent):
     server_a = domain_a.start_in_thread(5051)
     servers_b = domain_b.start_all_in_threads()
     try:
-        succeeded, notes, _ = driver["run_b_chain"](True)
+        succeeded, _, _ = driver["run_b_chain"](True)
         if not succeeded:
             # The captured statuses provide diagnostics without exposing tokens.
             print("Pinned driver did not reach its success outcome", file=sys.stderr)
@@ -54,12 +54,13 @@ def wire_results(upstream, capture, oracle):
     sys.path.insert(0, str(upstream / "checkers"))
     import observes_chain as wire
 
-    cmd = ["tshark", "-n", "-r", str(capture)]
+    cmd = ["tshark", "-n", "-r", "-"]
     for port in sorted({port for port, _ in ROUTES}):
         cmd.extend(["-d", f"tcp.port=={port},http"])
     cmd.extend(["-Y", "http", "-T", "json"])
-    packets = json.loads(subprocess.check_output(cmd, text=True, timeout=60),
-                         object_pairs_hook=wire._collect_duplicates)
+    with capture.open("rb") as stream:
+        packets = json.loads(subprocess.check_output(cmd, stdin=stream, text=True, timeout=60),
+                             object_pairs_hook=wire._collect_duplicates)
     requests, responses = {}, {}
     for packet in packets:
         layers = packet["_source"]["layers"]
@@ -73,6 +74,8 @@ def wire_results(upstream, capture, oracle):
                 name, separator, value = line.partition(":")
                 if separator:
                     headers[name.lower()] = value.strip()
+            if "http.authorization" in http:
+                headers.setdefault("authorization", wire._first_str(http["http.authorization"]))
             if headers.get("x-test-case") == "B_CHAIN":
                 requests[sid] = (int(tcp["tcp.dstport"]), http, headers)
         elif wire._extract_status(http):
@@ -153,10 +156,20 @@ def report(manifest, output, observation):
     scenario = inventory["named_scenarios"][SCENARIO]
     rows = [row for row in inventory["planned_executions"] if row.get("named_scenario_id") == SCENARIO]
     by_role = scenario["role_candidates"]
-    pins = {
-        role: next(tuple(pin) for pin in options if pin[0] in {"ietf127-demo", "agentmaurice", "rich-hackathon"})
-        for role, options in by_role.items()
-    }
+    pins = {}
+    for definition in scenario["roles"]:
+        role = definition["id"]
+        if demo := definition.get("demo"):
+            pins[role] = ("ietf127-demo", scenario["revision"], demo)
+        elif rich := definition.get("rich"):
+            pins[role] = ("rich-hackathon", scenario["revision"], rich)
+        elif role == "ingress":
+            pin = scenario["pin_overrides"]["agentmaurice"]
+            pins[role] = ("agentmaurice", pin["version"], pin["configuration"])
+        else:
+            raise ValueError(f"Reference runtime binding is missing for {role}")
+        if list(pins[role]) not in by_role[role]:
+            raise ValueError(f"Reference runtime binding for {role} is absent from the inventory")
     verdict = observation["status"]
     qualified = verdict == "pass"
     output.mkdir(parents=True, exist_ok=True)
@@ -226,10 +239,14 @@ def main():
     if args.capture is not None:
         with gzip.open(args.manifest, "rt", encoding="utf-8") as stream:
             oracle = json.load(stream)["named_scenarios"][SCENARIO]["success_oracle"]
-        result = wire_results(args.upstream.resolve(), args.capture, oracle)
-        if args.driver_exit != 0:
-            result["problems"].append(f"Pinned success driver exited {args.driver_exit}")
-        observation = {"status": "fail" if result["problems"] else "pass", **result}
+        try:
+            result = wire_results(args.upstream.resolve(), args.capture, oracle)
+        except (OSError, subprocess.SubprocessError, ValueError) as error:
+            observation = {"status": "blocked", "problems": [f"Capture audit unavailable ({type(error).__name__})"]}
+        else:
+            if args.driver_exit != 0:
+                result["problems"].append(f"Pinned success driver exited {args.driver_exit}")
+            observation = {"status": "fail" if result["problems"] else "pass", **result}
     return report(args.manifest, args.output, observation)
 
 

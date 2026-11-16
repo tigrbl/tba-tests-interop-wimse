@@ -53,4 +53,6 @@ wait "$capture_job"
 capture_pid=
 cat "$scratch/capture.log"
 sudo chown "$(id -u):$(id -g)" "$scratch/chain.pcap"
+chmod u+r "$scratch/chain.pcap"
+test -r "$scratch/chain.pcap"
 printf '%s\n' "$driver_exit" >"$scratch/driver-exit"
