@@ -23,10 +23,14 @@ docker run "${common[@]}" --network none -v "${project}_chain-home:/chain" \
 docker run "${common[@]}" --network "${project}_default" -v "${project}_chain-home:/chain" \
   -e PYTHONPATH=/src/selfrevoke-relay/src -e NODE=http://idchaind:26657 -e ANCHOR_PYTHON=python \
   -e HOME_DIR=/chain -e ANCHOR_DIST -e ANCHOR_SECRETS --entrypoint bash "$driver" -c '
-    for attempt in $(seq 1 30); do
-      if curl -sf http://idchaind:26657/status >/dev/null; then exec bash /src/deploy/anchor/13-fund-relay.sh; fi
+    for attempt in $(seq 1 45); do
+      if curl -fsS "$NODE/status" 2>/dev/null |
+        python -c "import json, sys; sync = json.load(sys.stdin)[\"result\"][\"sync_info\"]; sys.exit(not (int(sync[\"latest_block_height\"]) >= 2 and not sync[\"catching_up\"]))" 2>/dev/null; then
+        exec bash /src/deploy/anchor/13-fund-relay.sh
+      fi
       sleep 2
     done
+    echo "MintID chain did not commit its initial blocks" >&2
     exit 1'
 "${dc[@]}" up -d --no-build --pull never selfrevoke-relay
 docker run -d --pull never --name "$container" --network "${project}_default" \
