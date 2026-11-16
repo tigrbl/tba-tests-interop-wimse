@@ -6,10 +6,11 @@ from xml.etree import ElementTree
 from .hop_runner import hop_mismatches
 
 
-def audit_pytest_report(executions, report):
+def audit_pytest_report(executions, report, *, allow_unrecorded=False):
     """Check the exact current inventory against individual JUnit outcomes."""
     expected = {row["id"]: row for row in executions}
     attempts = []
+    unrecorded = 0
     for item in ElementTree.parse(report).iter("testcase"):
         values = {}
         for prop in item.findall("./properties/property"):
@@ -19,6 +20,9 @@ def audit_pytest_report(executions, report):
                     raise ValueError(f"Repeated JUnit property: {name}")
                 values[name] = prop.get("value")
         if not {"execution_id", "execution_result"} <= values.keys():
+            if allow_unrecorded and not {"execution_id", "execution_result"} & values.keys():
+                unrecorded += 1
+                continue
             raise ValueError("JUnit item lacks peer execution evidence")
         result = json.loads(values["execution_result"])
         key = values["execution_id"]
@@ -44,8 +48,11 @@ def audit_pytest_report(executions, report):
         attempts.append({**result, "attempt": 1})
     history = reconcile([row["id"] for row in executions], attempts)
     counts = Counter(row["status"] for row in history.values())
-    return {"required": len(expected), "counts": dict(sorted(counts.items())),
-            "complete": counts["passed"] == len(expected), "results": history}
+    audit = {"required": len(expected), "counts": dict(sorted(counts.items())),
+             "complete": counts["passed"] == len(expected) and unrecorded == 0, "results": history}
+    if allow_unrecorded:
+        audit["unrecorded"] = unrecorded
+    return audit
 
 
 def reconcile(execution_ids, attempts):

@@ -1,4 +1,4 @@
-schema_version = 1
+schema_version = "1.0.0"
 max_hops = 3
 # Current scenario hops are the workload calls expanded against endpoint peers.
 existing_scenario_hop_type = "workload-call"

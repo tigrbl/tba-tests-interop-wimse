@@ -1,0 +1,27 @@
+kind: workload_identity
+version: v1
+metadata:
+  name: tba-workload
+  labels:
+    matrix: interop
+spec:
+  spiffe:
+    id: /workload-0
+  rules:
+    allow:
+    - conditions:
+      - attribute: workload.unix.uid
+        eq:
+          value: "0"
+---
+kind: role
+version: v6
+metadata:
+  name: tba-workload-issuer
+spec:
+  allow:
+    workload_identity_labels:
+      matrix: [interop]
+    rules:
+    - resources: [workload_identity]
+      verbs: [list, read]

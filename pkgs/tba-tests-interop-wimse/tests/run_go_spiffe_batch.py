@@ -126,12 +126,16 @@ def main():
                         help="Frozen expanded manifest used to reconcile external support executions")
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--workers", type=int, default=1)
+    parser.add_argument("--qualify-only", action="store_true",
+                        help="Write the qualified workload snapshot for the shared matrix runner")
     args = parser.parse_args()
     isolated_support = args.teleport_container or args.mintid_container
     if (args.emilia_bridge or isolated_support) and not args.defakto_bridge:
         parser.error("external support mode requires --defakto-bridge to qualify both SPIFFE peers")
     if isolated_support and not args.manifest:
         parser.error("isolated external support mode requires --manifest")
+    if args.qualify_only and isolated_support:
+        parser.error("--qualify-only supports workload endpoints and EMILIA")
     snapshot = json.loads(args.snapshot.read_text(encoding="utf-8"))
     args.output.mkdir(parents=True, exist_ok=False)
     with TemporaryDirectory(dir=args.output) as directory:
@@ -183,6 +187,19 @@ def main():
     runtime.write_text(json.dumps(snapshot, indent=2), encoding="utf-8")
     if not isolated_support:
         shutil.copytree(args.snapshot.with_suffix(".cred"), runtime.with_suffix(".cred"))
+    if args.qualify_only:
+        native_evidence = ("native-controls.json", *(f"{stage}/results.xml" for stage in (
+            "native_baseline_policy", "native_svid_policy", "native_acquisition_qualification",
+            "native_specialized_acquisition_qualification", "typed_service_qualification",
+        )))
+        for evidence in native_evidence:
+            source = args.snapshot.parent / evidence
+            if source.is_file():
+                destination = args.output / evidence
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(source, destination)
+        print(runtime)
+        return
     plan = expanded_plan(snapshot["peers"], include_candidates=True, include_executions=True)
     if isolated_support:
         if args.teleport_container:

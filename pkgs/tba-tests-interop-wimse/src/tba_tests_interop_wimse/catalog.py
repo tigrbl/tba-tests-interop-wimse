@@ -7,11 +7,17 @@ except ModuleNotFoundError:
     import tomli as tomllib
 
 
+CATALOG_SCHEMA_VERSION = "1.0.0"
+
+
 def read_catalog(filename):
     with files(__package__).joinpath(filename).open("rb") as source:
         data = tomllib.load(source)
-    if data.get("schema_version") != 1:
-        raise ValueError(f"Unsupported schema in {filename}")
+    version = data.get("schema_version")
+    if version != CATALOG_SCHEMA_VERSION:
+        raise ValueError(
+            f"Unsupported schema in {filename}: expected {CATALOG_SCHEMA_VERSION!r}, got {version!r}"
+        )
     return data
 
 

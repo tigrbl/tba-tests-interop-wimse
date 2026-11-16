@@ -13,6 +13,7 @@ from support.spire_issuer import SPIRE, docker
 
 
 AGENT_IMAGE = "sha256:ab3a8ce70435374cc5d84c81eabf0278dc046ddbc0a736d59694ba9e5975b1b6"
+AGENT_IMAGE_REFERENCE = f"ghcr.io/spiffe/spire-agent@{AGENT_IMAGE}"
 AGENT = "/opt/spire/bin/spire-agent"
 SOCKET = "/tmp/tba-workload.sock"
 OUTPUT = "/tmp/tba-acquired"
@@ -103,7 +104,7 @@ def spire_workload_api(issuer, directory):
     response = Path(directory) / "response"
     response.mkdir()
     name = "tba-workload-api-" + uuid4().hex
-    docker("create", "--name", name, "--network", f"container:{issuer.container}", AGENT_IMAGE,
+    docker("create", "--name", name, "--network", f"container:{issuer.container}", AGENT_IMAGE_REFERENCE,
            "-config", "/tmp/agent.conf", "-joinTokenFile", "/tmp/join-token")
     try:
         docker("cp", config, f"{name}:/tmp/agent.conf")

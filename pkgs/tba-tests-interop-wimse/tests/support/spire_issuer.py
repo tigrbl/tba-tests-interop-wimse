@@ -18,6 +18,7 @@ from tba_tests_interop_wimse.wic import TlsFiles
 from support.wic_fixture import write_leaf
 
 IMAGE = "sha256:ff546f4c62dafc479a0cd79eae9a7b6df2975754d75efd31706098e0d7548837"
+IMAGE_REFERENCE = f"ghcr.io/spiffe/spire-server@{IMAGE}"
 SPIRE = "/opt/spire/bin/spire-server"
 CONFIG = """server {
     trust_domain = "example.org"
@@ -130,7 +131,7 @@ def spire_issuer(parent, *, domain="example.org"):
         config = directory / "server.conf"
         config.write_text(CONFIG.replace('trust_domain = "example.org"', f'trust_domain = "{domain}"'), encoding="ascii")
         name = "tba-wic-matrix-" + uuid4().hex
-        docker("create", "--name", name, "--network", "none", IMAGE, "-config", "/server.conf")
+        docker("create", "--name", name, "--network", "none", IMAGE_REFERENCE, "-config", "/server.conf")
         try:
             docker("cp", config, f"{name}:/server.conf")
             docker("start", name)

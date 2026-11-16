@@ -200,42 +200,39 @@ def typed_hop_adapters(request, peer_snapshot, tmp_path_factory):
             agent_factory=lambda: request.getfixturevalue("peer_workload_api"),
         )
         if emilia := peer_snapshot.get("emilia_qualification"):
-            from external_workload_selection import endpoint_candidates
             from support.emilia_endpoint import OPERATION, EmiliaBindings, bridge_digest
 
             bridge = Path(os.environ["TBA_WIMSE_EMILIA_BRIDGE"]).resolve()
             if bridge_digest(bridge) != emilia["bridge_sha256"]:
                 pytest.fail("EMILIA Gate bridge differs from the qualified snapshot")
 
-            class EmiliaFlow(TypedServiceFlow):
-                def supports(self, execution):
-                    return (endpoint_candidates(execution) in ({"go-spiffe"}, {"defakto"})
-                            and super().supports(execution))
-
-            flow = EmiliaFlow(adapters[("call", "call", "call")], EmiliaBindings, agent_factory=lambda: bridge)
+            flow = TypedServiceFlow(adapters[("call", "call", "call")], EmiliaBindings, agent_factory=lambda: bridge)
             adapters[("call", OPERATION)] = flow
             adapters[("call", "call", OPERATION)] = flow
         if teleport := peer_snapshot.get("teleport_qualification"):
-            from support.teleport_endpoint import OPERATION, TeleportBindings, TeleportWorkloadAPI
+            from support.teleport_endpoint import OPERATION, TeleportWorkloadAPI
+            from teleport_runtime import CombinedTeleportBindings
 
             def teleport_agent():
-                issuer = request.getfixturevalue("spiffe_peer_adapter").issuer
                 agent = TeleportWorkloadAPI(os.environ["TBA_WIMSE_TELEPORT_CONTAINER"],
-                                            tmp_path_factory.mktemp("teleport-svid"), issuer)
+                                            tmp_path_factory.mktemp("teleport-svid"))
                 if agent.image() != teleport["image"]:
                     pytest.fail("Teleport container image differs from the qualified snapshot")
                 return agent
 
-            flow = TypedServiceFlow(adapters[("call", "call", "call")], TeleportBindings,
+            flow = TypedServiceFlow(adapters[("call", "call", "call")], CombinedTeleportBindings,
                                     agent_factory=teleport_agent)
+            adapters[(OPERATION,)] = flow
             adapters[(OPERATION, "call")] = flow
             adapters[(OPERATION, "call", "call")] = flow
-        if peer_snapshot.get("mintid_qualification"):
-            from mintid_endpoint import DECISION_TIMEOUT, OPERATION, MintIDBindings
+        if mintid := peer_snapshot.get("mintid_qualification"):
+            from mintid_endpoint import OPERATION, MintIDBindings, driver_fingerprint
 
+            container = os.environ["TBA_WIMSE_MINTID_CONTAINER"]
+            if any(mintid.get(key) != value for key, value in driver_fingerprint(container).items()):
+                pytest.fail("MintID driver image or bridge differs from the qualified snapshot")
             flow = TypedServiceFlow(adapters[("call", "call", "call")], MintIDBindings,
-                                    agent_factory=lambda: os.environ["TBA_WIMSE_MINTID_CONTAINER"],
-                                    workload_response_timeout=DECISION_TIMEOUT + 30)
+                                    agent_factory=lambda: container)
             adapters[("call", OPERATION)] = flow
             adapters[("call", "call", OPERATION)] = flow
     if peer_snapshot and os.getenv("TBA_WIMSE_INCLUDE_NATIVE") == "1":
@@ -301,6 +298,24 @@ def typed_hop_adapters(request, peer_snapshot, tmp_path_factory):
                 for record in policy_records.values():
                     for path in record["paths"]:
                         adapters[("native", *path)] = policy_flow
+    from redthread_refusal_prefix import CALL_PATHS, DELEGATION_PATHS, RedthreadRefusalPrefix
+    from support.typed_workload_chain import TypedWorkloadChain
+
+    delegation_prefix = RedthreadRefusalPrefix(TypedWorkloadChain({}))
+    for path in DELEGATION_PATHS:
+        adapters.setdefault(path, delegation_prefix)
+    if template := adapters.get(("service",)):
+        workload_prefix = RedthreadRefusalPrefix(template.workload_chain)
+        for path in CALL_PATHS:
+            adapters.setdefault(path, workload_prefix)
+
+    from omniarx_prefix import PATHS as OMNIARX_PATHS, OmniArxPrefixFlow
+
+    for scope in ((), ("native",)):
+        if template := adapters.get((*scope, "service")):
+            prefix_flow = OmniArxPrefixFlow(template.workload_chain)
+            for path in OMNIARX_PATHS:
+                adapters.setdefault((*scope, *path), prefix_flow)
     return adapters
 
 

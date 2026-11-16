@@ -1,0 +1,388 @@
+name: WIMSE interop matrix
+
+on:
+  workflow_dispatch:
+    inputs:
+      shards:
+        description: Number of parallel batches
+        type: choice
+        default: '32'
+        options: ['4', '8', '16', '32', '64']
+      execution_id:
+        description: Exact published execution ID (leave empty to run all 142,844)
+        type: string
+      commit_evidence:
+        description: Commit the audited report to interop-evidence (master only)
+        type: boolean
+        default: false
+      require_all_pass:
+        description: Fail reporting if any case is blocked
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+env:
+  INTEROP_PACKAGE: pkgs/tba-tests-interop-wimse
+  PYTHONPATH: pkgs/tba-tests-interop-wimse/src:pkgs/tba-tests-interop-wimse/tests
+  PYTHONUNBUFFERED: '1'
+  TBA_WIMSEY_CHECKOUT: .interop/wimsey
+  TBA_WIMSE_COFIDE_BRIDGE: .interop/cofide-bridge
+  TBA_WIMSE_PEER_SNAPSHOT: .interop/qualification.json
+  TBA_WIMSE_GO_SPIFFE_BRIDGE: .interop/go-spiffe
+  TBA_WIMSE_DEFAKTO_BRIDGE: .interop/defakto/verify.mjs
+  TBA_WIMSE_EMILIA_BRIDGE: .interop/emilia/check.mjs
+  TBA_WIMSE_TELEPORT_CONTAINER: tba-interop-teleport
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    outputs:
+      shards: ${{ steps.plan.outputs.shards }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          repository: kanywst/wimsey
+          ref: 56b070582f3e380c5006630698fb4ca808c08b04
+          path: .interop/wimsey
+          persist-credentials: false
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          repository: cred-ninja/sdk
+          ref: 586e1a76f487c2376e0ba0a4687bb2de8d3eb588
+          path: .interop/cred
+          persist-credentials: false
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          repository: cofide/wimse-s2s-httpsig-poc
+          ref: 7984a60105002dc65b31e9cd08572cd5d10ed9d6
+          path: .interop/cofide
+          persist-credentials: false
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          repository: authgent/authgent
+          ref: 8341cf932c9816dc666f2a6577b6776bd6f3b978
+          path: .interop/authgent
+          persist-credentials: false
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          repository: tigrbl/tigrbl_auth
+          ref: c12980ae00260c356ced82f57fa92238a2b9f02a
+          path: .interop/tba
+          sparse-checkout: |
+            pkgs/00-primitives/tba-primitives-identity
+            pkgs/01-storage/tba-storage-authorization-policy
+            pkgs/02-contracts/tba-contracts-authorization
+            pkgs/02-contracts/tba-contracts-identity
+            pkgs/02-contracts/tba-contracts-security-trust
+            pkgs/02-contracts/tba-contracts-workload-identity
+            pkgs/05-bases/tba-bases-capability
+            pkgs/05-bases/tba-bases-workload-identity
+            pkgs/10-concrete/tba-concrete-authority-graph
+            pkgs/10-concrete/tba-concrete-capability
+            pkgs/10-concrete/tba-concrete-svid
+            pkgs/20-providers/tba-provider-replay-memory
+            pkgs/20-providers/tba-provider-spiffe-workload-api
+            pkgs/30-storage-runtime/tba-durability-authorization-policy
+            pkgs/40-capabilities/tba-capability-policy-assurance
+            pkgs/50-protocols/tba-protocol-workload-spiffe-workload-api
+            pkgs/55-profiles/tba-profile-workload-credential-spiffe-wit-svid
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.12.13'
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '24.18.0'
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version: '1.25.3'
+          cache: false
+      - name: Install Python lab dependencies
+        shell: bash
+        run: |
+          mapfile -t packages < <(find .interop/tba/pkgs -mindepth 3 -maxdepth 3 -name pyproject.toml -printf '%h\n' | sort)
+          test "${#packages[@]}" -eq 17
+          python -m pip wheel --wheel-dir .interop/wheels "./$INTEROP_PACKAGE[wic,wpt,spiffe-wic]" \
+            "${packages[@]}" \
+            'tba-testkit-workload-credential-conformance==0.4.0.dev3' \
+            'cryptography==50.0.2' 'pytest==9.2.0' 'pytest-xdist==3.8.0' \
+            'grpcio==1.85.1' 'protobuf==7.36.2'
+          python -m pip install --no-input --no-index --no-deps .interop/wheels/*.whl
+          python -m pip check
+      - name: Build pinned peers
+        shell: bash
+        run: |
+          rustup toolchain install 1.97.0 --profile minimal
+          (cd .interop/wimsey && cargo +1.97.0 build --locked -p wimsey-cli)
+          npm install --prefix .interop/cred-tooling --no-save --no-package-lock --ignore-scripts typescript@6.0.3
+          ln -s "$PWD/.interop/cred-tooling/node_modules" .interop/cred/node_modules
+          mkdir .interop/cofide-build
+          cp .interop/cofide/{go.mod,go.sum} "$INTEROP_PACKAGE/tests/support/cofide_bridge.go" .interop/cofide-build/
+          (
+            cd .interop/cofide-build
+            go mod edit -module=interop-ci.invalid/cofide \
+              -require=github.com/cofide/wimse-s2s-httpsig-poc@v0.0.0 \
+              -replace=github.com/cofide/wimse-s2s-httpsig-poc=../cofide
+            go build -mod=mod -o ../cofide-bridge .
+          )
+          (cd "$INTEROP_PACKAGE/tests/support/go_spiffe_bridge" && CGO_ENABLED=0 go build -mod=readonly -o "$GITHUB_WORKSPACE/.interop/go-spiffe" .)
+          cp -r "$INTEROP_PACKAGE/tests/support/defakto_bridge" .interop/defakto
+          cp -r "$INTEROP_PACKAGE/tests/support/emilia_bridge" .interop/emilia
+          npm ci --prefix .interop/defakto --ignore-scripts
+          npm ci --prefix .interop/emilia --ignore-scripts
+      - name: Qualify peer fixtures
+        env:
+          RUSTUP_TOOLCHAIN: '1.97.0'
+          TBA_WIMSE_CRED_CHECKOUT: .interop/cred
+          TBA_WIMSE_SPIRE: '1'
+          TBA_WIMSE_SPIRE_WIT: '1'
+          TBA_WIMSE_COMBINED_SIGNATURE: '1'
+          TBA_WIMSE_COMBINED_SIGNATURE_WIMSE: '1'
+          TBA_WIMSE_COMBINED_WPT: '1'
+          TBA_WIMSE_COMBINED_WPT_WIMSE: '1'
+        run: python -m support.qualification_overlay
+      - name: Qualify native workload directions and issuers
+        run: |
+          python "$INTEROP_PACKAGE/tests/qualify_native_runtime.py" \
+            --snapshot "$TBA_WIMSE_PEER_SNAPSHOT" --output .interop/native-qualification
+          python "$INTEROP_PACKAGE/tests/qualify_native_services.py" \
+            --snapshot .interop/native-qualification/qualification.json --output .interop/native-services
+          python "$INTEROP_PACKAGE/tests/run_go_spiffe_batch.py" \
+            --snapshot .interop/native-services/qualification.json \
+            --binary "$TBA_WIMSE_GO_SPIFFE_BRIDGE" --linux-binary "$TBA_WIMSE_GO_SPIFFE_BRIDGE" \
+            --defakto-bridge "$TBA_WIMSE_DEFAKTO_BRIDGE" --emilia-bridge "$TBA_WIMSE_EMILIA_BRIDGE" \
+            --qualify-only --output .interop/qualified
+          bash .github/scripts/start-teleport.sh
+          python "$INTEROP_PACKAGE/tests/qualify_teleport_runtime.py" \
+            --snapshot .interop/qualified/qualification.json --container "$TBA_WIMSE_TELEPORT_CONTAINER" \
+            --output .interop/qualified/teleport.json
+          cp .interop/qualified/teleport.json "$TBA_WIMSE_PEER_SNAPSHOT"
+          cp .interop/qualified/native-controls.json .interop/native-controls.json
+      - name: Partition the published execution inventory
+        id: plan
+        shell: bash
+        env:
+          SHARDS: ${{ inputs.shards }}
+          EXECUTION_ID: ${{ inputs.execution_id }}
+        run: |
+          options=()
+          if [[ -n "$EXECUTION_ID" ]]; then options+=("--execution-id=$EXECUTION_ID"); fi
+          shards=$(python "$INTEROP_PACKAGE/tests/ci_matrix.py" prepare \
+            --manifest "$INTEROP_PACKAGE/matrix/wimse-interop-all-tba-executions.json.gz" \
+            --snapshot "$TBA_WIMSE_PEER_SNAPSHOT" --shards "$SHARDS" --output .interop/plan "${options[@]}")
+          printf 'shards=%s\n' "$shards" >> "$GITHUB_OUTPUT"
+      - name: Run pinned Authgent issuance and handoff cases
+        shell: bash
+        run: |
+          mkdir .interop/plan/authgent
+          if python -m venv .interop/authgent-venv \
+            && .interop/authgent-venv/bin/python -m pip install --no-input ./.interop/authgent/server \
+            && python "$INTEROP_PACKAGE/tests/run_authgent_matrix.py" \
+              --snapshot "$TBA_WIMSE_PEER_SNAPSHOT" --mapping .interop/plan/mapping.json.gz \
+              --runtime .interop/plan/runtime.json.gz --authgent-checkout .interop/authgent \
+              --authgent-python .interop/authgent-venv/bin/python --cred-checkout .interop/cred \
+              --output .interop/authgent-run; then
+            if [[ -f .interop/authgent-run/results.xml ]]; then
+              cp .interop/authgent-run/{results.xml,summary.json,per-id.jsonl} .interop/plan/authgent/
+            fi
+          else
+            echo "Authgent execution failed. See the prepare job log." > .interop/plan/authgent/error.txt
+          fi
+      - name: Package plan and qualified runtime
+        run: |
+          tar -czf interop-plan.tgz -C .interop plan
+          tar -czf interop-runtime.tgz -C .interop qualification.json qualification.cred native-controls.json wheels \
+            go-spiffe defakto emilia \
+            cofide-bridge wimsey/target/debug/wimsey wimsey/target/debug/tba-wimsey-wpt-bridge
+          tar -czf interop-qualification.tgz -C .interop/qualified \
+            teleport.json native-controls.json native_baseline_policy native_svid_policy \
+            native_acquisition_qualification native_specialized_acquisition_qualification typed_service_qualification
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: interop-qualification
+          path: interop-qualification.tgz
+          retention-days: 30
+          overwrite: true
+          if-no-files-found: error
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: interop-plan
+          path: interop-plan.tgz
+          retention-days: 7
+          compression-level: 0
+          overwrite: true
+          if-no-files-found: error
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: interop-runtime
+          path: interop-runtime.tgz
+          retention-days: 7
+          compression-level: 0
+          overwrite: true
+          if-no-files-found: error
+
+  execute:
+    needs: prepare
+    name: Execute shard ${{ matrix.shard }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      max-parallel: 16
+      matrix:
+        shard: ${{ fromJSON(needs.prepare.outputs.shards) }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          repository: kanywst/wimsey
+          ref: 56b070582f3e380c5006630698fb4ca808c08b04
+          path: .interop/wimsey
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.12.13'
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '24.18.0'
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: interop-plan
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: interop-runtime
+      - name: Run selected executions
+        shell: bash
+        env:
+          SHARD: ${{ matrix.shard }}
+          EXECUTION_ID: ${{ inputs.execution_id }}
+          TBA_WIMSE_EXPANDED: '1'
+          TBA_WIMSE_INCLUDE_NATIVE: '1'
+          TBA_WIMSE_FROZEN_MANIFEST: .interop/plan/runtime.json.gz
+        run: |
+          mkdir -p shard-evidence
+          tar -xzf interop-plan.tgz -C .interop
+          tar -xzf interop-runtime.tgz -C .interop
+          python -m pip install --no-input --no-index --no-deps .interop/wheels/*.whl
+          python -m pip check
+          bash .github/scripts/start-teleport.sh
+          export TBA_WIMSE_EXECUTION_SELECTION=".interop/plan/shard-$SHARD.json"
+          test_path="$INTEROP_PACKAGE/tests/peer/test_candidate_executions.py"
+          options=(-n 2 --dist load)
+          if [[ -n "$EXECUTION_ID" ]]; then
+            options=()
+            if [[ "$EXECUTION_ID" == hop-v1:* ]]; then
+              test_path+="::test_typed_hop_execution"
+            else
+              test_path+="::test_peer_execution"
+            fi
+          fi
+          python -m pytest "${options[@]}" -q --tb=short -o junit_family=xunit1 \
+            --junitxml=shard-evidence/results.xml "$test_path" \
+            2>&1 | tee shard-evidence/pytest.log
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: ${{ !cancelled() }}
+        with:
+          name: interop-shard-${{ matrix.shard }}
+          path: shard-evidence/
+          retention-days: 7
+          overwrite: true
+          if-no-files-found: warn
+
+  report:
+    needs: [prepare, execute]
+    if: ${{ !cancelled() && needs.prepare.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      recordable: ${{ steps.aggregate.outputs.recordable }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.12.13'
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: interop-plan
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        continue-on-error: true
+        with:
+          pattern: interop-shard-*
+          path: reports
+      - name: Aggregate per-ID evidence
+        id: aggregate
+        shell: bash
+        env:
+          REQUIRE_ALL_PASS: ${{ inputs.require_all_pass }}
+        run: |
+          tar -xzf interop-plan.tgz
+          options=()
+          if [[ "$REQUIRE_ALL_PASS" == true ]]; then options+=(--require-all-pass); fi
+          status=0
+          python "$INTEROP_PACKAGE/tests/ci_matrix.py" aggregate --plan plan --reports reports \
+            --manifest "$INTEROP_PACKAGE/matrix/wimse-interop-all-tba-executions.json.gz" \
+            --output interop-report "${options[@]}" || status=$?
+          if [[ -f interop-report/summary.md ]]; then cat interop-report/summary.md >> "$GITHUB_STEP_SUMMARY"; fi
+          if [[ -f interop-report/provenance.json ]]; then
+            python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          path = Path("interop-report/provenance.json")
+          provenance = json.loads(path.read_text())
+          provenance.update(source_commit=os.environ["GITHUB_SHA"], workflow_ref=os.environ["GITHUB_WORKFLOW_REF"],
+                            run_id=os.environ["GITHUB_RUN_ID"], run_attempt=os.environ["GITHUB_RUN_ATTEMPT"],
+                            run_url=f"{os.environ['GITHUB_SERVER_URL']}/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}")
+          path.write_text(json.dumps(provenance, indent=2) + "\n")
+          summary = json.loads(Path("interop-report/summary.json").read_text())
+          with open(os.environ["GITHUB_OUTPUT"], "a") as output:
+              print(f"recordable={'true' if summary['complete'] else 'false'}", file=output)
+          PY
+          fi
+          printf 'status=%s\n' "$status" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: ${{ !cancelled() }}
+        with:
+          name: interop-report
+          path: interop-report/
+          retention-days: 30
+          overwrite: true
+          if-no-files-found: warn
+      - name: Set workflow result
+        if: ${{ !cancelled() }}
+        env:
+          REPORT_STATUS: ${{ steps.aggregate.outputs.status }}
+        run: test "$REPORT_STATUS" = 0
+
+  commit-evidence:
+    needs: report
+    if: ${{ !cancelled() && inputs.commit_evidence && github.ref == 'refs/heads/master' && needs.report.outputs.recordable == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: interop-report
+          path: interop-report
+      - name: Commit audited evidence
+        shell: bash
+        run: |
+          bash .github/scripts/record-interop-evidence.sh interop-report
+          commit=$(git rev-parse HEAD)
+          printf 'Evidence committed at [%s](%s/%s/tree/%s/runs/%s/attempt-%s).\n' \
+            "$commit" "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$commit" \
+            "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" >> "$GITHUB_STEP_SUMMARY"

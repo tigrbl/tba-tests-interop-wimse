@@ -1,6 +1,6 @@
 # TBA WIMSE interop tests
 
-This Layer 120 test project contains the WIMSE scenario definitions, peer execution plans, and rules for counting combinations.
+This interoperability project contains the WIMSE scenario definitions, peer execution plans, and rules for counting combinations.
 
 | File | Purpose |
 | --- | --- |
@@ -17,6 +17,8 @@ This Layer 120 test project contains the WIMSE scenario definitions, peer execut
 | [External peer access](matrix/wimse-external-peer-access.md) | Public artifacts and sandbox dependencies for proposed peers |
 
 From this package directory, run `uv run tba-tests-interop-wimse`. After installing the wheel, run `tba-tests-interop-wimse` or `python -m tba_tests_interop_wimse`. The command loads the TOML files from the installed package.
+
+The bundled catalogs declare their schema with the SemVer string `schema_version = "1.0.0"`. The loader accepts that exact version. Advance the schema version when the catalog format changes, and update the loader to support it.
 
 Give each factor a stable key under `[factors.<key>]`, a display name, and a list of levels. Each rule has an `id`, a `basis`, and a `when` predicate. When it matches, the `requires` predicate must hold or the `excludes` predicate must be false. Predicates can test a factor's level with `{ factor = "tls", in = ["WIC mutual TLS"] }` or combine predicates using `all`, `any`, and `not`. Keep expected denials in the scenario matrix when a request can occur and the verifier is expected to reject it.
 
@@ -64,11 +66,11 @@ With the peer lab dependencies loaded, `python tests/run_three_call_batch.py --h
 
 The [native WIT-SVID controls](matrix/wimse-native-wit-svid-controls.xml) exercise TbA issuance and presentation across six proof and transport profiles. They are component evidence for the issuer integration and are kept separate from candidate execution results.
 
-After refreshing the pinned peer snapshot, run `tests/t3/test_native_wit_svid_qualification.py` with `-o junit_family=xunit1`. Pass the resulting XML and snapshot to `python tests/run_native_wit_svid_batch.py --help` for the arguments to run the 16,710 native WIT-SVID-only cases. The driver checks the six issuer controls, records the runtime snapshot and selected IDs, and audits the one-, two-, and three-hop results against that snapshot. Set `TBA_WIMSE_NATIVE_WIT_ONLY=1` with expanded native collection enabled to select the same scope from pytest.
+After refreshing the pinned peer snapshot, collect JUnit evidence from the native WIT-SVID issuer controls for that runtime, using `-o junit_family=xunit1`. Pass the resulting XML and snapshot to `python tests/run_native_wit_svid_batch.py --help` for the arguments to run the 16,710 native WIT-SVID-only cases. The driver checks the six issuer controls, records the runtime snapshot and selected IDs, and audits the one-, two-, and three-hop results against that snapshot. Set `TBA_WIMSE_NATIVE_WIT_ONLY=1` with expanded native collection enabled to select the same scope from pytest.
 
-For the 6,261 X.509-SVID-only cases, run `tests/t3/test_native_x509_svid_qualification.py` and pass its JUnit report and the pinned snapshot to the same driver with `--issuer tba-x509-svid`. The runtime uses freshly minted TbA X.509-SVIDs on the selected SPIFFE mTLS hops, with the baseline application-proof issuer where applicable. `TBA_WIMSE_NATIVE_ISSUER=tba-x509-svid` selects this scope from pytest.
+For the 6,261 X.509-SVID-only cases, collect the native X.509-SVID issuer control JUnit report and pass it with the pinned snapshot to the same driver with `--issuer tba-x509-svid`. The runtime uses freshly minted TbA X.509-SVIDs on the selected SPIFFE mTLS hops, with the baseline application-proof issuer where applicable. `TBA_WIMSE_NATIVE_ISSUER=tba-x509-svid` selects this scope from pytest.
 
-For the 23,878 cases using both native issuers, run `tests/t3/test_native_combined_svid_qualification.py` and both component controls against the same fixture version. Pass the combined JUnit report as `--controls`, the two component reports as `--wit-controls` and `--x509-controls`, and select `--issuer combined`. The scope includes both credentials on the same request and credentials used on separate hops in the same flow. `TBA_WIMSE_NATIVE_ISSUER=combined` selects this scope from pytest.
+For the 23,878 cases using both native issuers, collect the combined issuer controls and both component control reports against the same fixture version. Pass the combined JUnit report as `--controls`, the two component reports as `--wit-controls` and `--x509-controls`, and select `--issuer combined`. The scope includes both credentials on the same request and credentials used on separate hops in the same flow. `TBA_WIMSE_NATIVE_ISSUER=combined` selects this scope from pytest.
 
 Use `python tests/run_typed_service_batch.py --help` for the 21,140 typed service cases. Run with `--qualify` first to check each operation path and outcome with its assigned native or existing peer bindings. Pass the resulting JUnit file as `--qualification-results` to run the entire slice against the same pinned snapshot. The suite uses the local status, delegation, exchange, and bearer services and the pinned SPIRE Agent Workload API. The agent returns the workload certificate, key, and bundle used by the next call. The results record reached hops, stop reasons, and resource effects per ID.
 
@@ -76,11 +78,11 @@ Use the same runner with `--native-acquisition` for the 627 native credential-ac
 
 Use `--specialized-acquisition` for the 105 native executions where that mTLS call depends on a terminal policy decision. The local services cover issuer and holder revocation, revocation before commit, delegation status, and approval display verification. The workload receiver writes to its ledger only after an allow decision. The same `--qualify` and `--qualification-results` steps apply to this tranche.
 
-To run the 728 short native workload cases with baseline credentials, capture JUnit evidence from `tests/t3/test_native_baseline_workload_qualification.py` using `-o junit_family=xunit1`. Pass that evidence as `--controls` to `tests/run_native_baseline_workload_batch.py` with `--snapshot` pointing to the current pinned peer snapshot and `--output` to a new result directory. These cases exercise the existing scenario oracles for the enforcing hop, event order, writes, and releases.
+To run the 728 short native workload cases with baseline credentials, capture JUnit evidence from the native baseline workload controls using `-o junit_family=xunit1`. Pass that evidence as `--controls` to `tests/run_native_baseline_workload_batch.py` with `--snapshot` pointing to the current pinned peer snapshot and `--output` to a new result directory. These cases exercise the existing scenario oracles for the enforcing hop, event order, writes, and releases.
 
 Use `tests/run_native_baseline_policy_batch.py` for the 2,396 specialized flows with baseline credentials. Supply the baseline profile JUnit file as `--profile-controls` and the current peer snapshot as `--snapshot`. Run `--qualify` first, then supply its JUnit report as `--qualification-results` for the full tranche. The loopback services run transaction-token issuance, delegation receipt verification, and terminal policy checks with the existing workload fixtures.
 
-Add `--svids`, `--wit-controls`, `--x509-controls`, and `--combined-controls` to the same runner for the 8,775 specialized flows that use native SVIDs. Supply the issuer qualification JUnit files from `tests/t3/`. The per-ID runtime trace includes the fingerprint and verification outcome for each native SVID seen by a receiver.
+Add `--svids`, `--wit-controls`, `--x509-controls`, and `--combined-controls` to the same runner for the 8,775 specialized flows that use native SVIDs. Supply the WIT-SVID, X.509-SVID, and combined issuer JUnit reports for the pinned runtime. The per-ID runtime trace includes the fingerprint and verification outcome for each native SVID seen by a receiver.
 
 Use `tests/run_go_spiffe_batch.py` for the external SPIFFE workload cases. Build the pinned module in `tests/support/go_spiffe_bridge/` for the host and for Linux. The Linux binary checks credential acquisition directly against the local SPIRE Agent. The host binary independently verifies the presented X.509-SVID and SPIFFE ID in the shared mTLS fixture. Install the locked dependencies for `tests/support/defakto_bridge/` with `npm ci --ignore-scripts`, then pass its `verify.mjs` as `--defakto-bridge` to qualify Defakto's SDK verification and select Defakto-only and mixed go-spiffe cases. The optional external support services remain separate qualification dependencies.
 
@@ -90,12 +92,7 @@ Generated scenarios and peer runs expose `hop_count` and `hop_sequence_id` for t
 
 ## Verification
 
-TbA T0–T3 validation lives in [tigrbl_auth](https://github.com/tigrbl/tigrbl_auth). This repository runs peer acceptance and matrix execution using explicitly pinned runtimes.
-
-- **T0:** Check every legacy factor level, each flat rule's allowed and excluded inputs, and the scoped catalog contract.
-- **T1:** Compare the full scoped inventory against an independent reference enumeration. Check directional eligibility, result reconciliation, and the revocation and bearer-release contracts using synthetic authority and resource fixtures.
-- **T2:** Build the wheel and set `TBA_WIMSE_INTEROP_WHEEL` to its absolute path. Run `tests/t2` to compare isolated wheel output with the verified source inventory.
-- **T3 pilot:** Run `tests/t3` with the native WIC/mTLS and certificate-status package closure installed from the selected wheels, plus pytest and the Layer 120 workload credential fixtures. The pilot passes a native TLS control and checks the exact rejection reasons for the three identity variants. It covers four local WIC scenarios.
+Use the [frozen manifest](matrix/wimse-interop-all-tba-executions.json.gz) to check the 142,844-ID inventory, including native TbA-to-TbA and external peer cases. Run peer components and matrix executions against pinned endpoints. Keep qualification controls separate from per-ID execution results.
 
 The 3,148 structural keys are exhaustive for the options declared by the current templates. The 20 flat axes are retained for comparison and are not all active independent axes in the templates. Runtime adapters and qualifying evidence for the remaining profiles and families are pending. No external peer pair is qualified. The spreadsheet is a snapshot of the current candidate inventory.
 
@@ -168,7 +165,7 @@ proof key bound to the WIT). TLS file paths and key files are supplied by the
 operator. The receiver checks the audience against its configured DNS name,
 listening port, and the requested fixture route.
 
-The local T3 suite uses TbA for both endpoints with separate TLS, issuer,
+The native interoperability baseline uses TbA for both endpoints with separate TLS, issuer,
 and proof keys. It exercises all five profiles and all eight profile/scheme
 configurations in the baseline inventory. The 52 structural rows include
 positive writes and readback, applicable identity and proof refusals, replay,
@@ -203,7 +200,7 @@ The first component slices are opt-in:
   `56b070582f3e380c5006630698fb4ca808c08b04` built with
   `cargo build --locked -p wimsey-cli`. Run
   `tests/peer/test_wimsey_wic_component.py` with the
-  WIC dependencies and Layer 120 certificate fixture available. This pairs
+  WIC dependencies and workload certificate fixture available. This pairs
   the wimsey WIC verifier with TbA's verifier over the shared TLS fixture,
   recording which engine made the decision at the checked endpoint.
   `tests/peer/test_wimsey_http_signature.py` verifies request signatures
@@ -247,8 +244,7 @@ binary digests. It also records qualification of the ephemeral direct
 test CA for that WIC configuration. The peer suite consumes the snapshot
 through the same environment variable. Pass its path to the auditor
 with `--peer-snapshot` so evidence is matched to the pinned execution IDs.
-These are local lab results. Independent operator evidence and promotion
-follow ADR-1011 and ADR-1023.
+These results describe the pinned local lab configuration.
 
 The direct WIC lab adapter also runs scenarios 09, 10, 11, 13, and 16
 with baseline CA trust in both TbA/wimsey directions and both identifier
@@ -372,9 +368,7 @@ can appear in several categories. Trust isolation is exercised by
 holding the TLS CA fixed and varying the workload identity or its
 configured workload anchor.
 
-Run `tests/t3/test_structural_runtime.py` for one native result per
-structural scenario. The native adapter registry is separate from the
-peer lab registry. Rows without a runtime binding appear as skipped.
+The native adapter registry is separate from the peer lab registry. The expanded inventory includes native cases with `TBA_WIMSE_INCLUDE_NATIVE=1`. Rows without a runtime binding appear as skipped.
 
 Pytest collects one item per generated execution ID. A single test function joins
 each row to its scenario and calls the same runner used by the pilot. The report
@@ -386,7 +380,7 @@ multiple variants and families. The runner checks qualification, checks adapter
 support, reuses setup controls within each worker, and opens an isolated context
 for each row. Its setup key must include every setting that affects the control,
 including ordered peer and issuer pins, configuration, and topology. Local
-reference adapters belong in the internal tier tests.
+reference adapters are separate from the peer lab bindings.
 
 The 31 flat rules remain available for comparison through `--legacy-count`. In the scoped model, hop layout handles the topology rules. Profile expansion handles WIC URI and issuer applicability. Variant definitions handle transaction, authority, accounting, and event ordering. The peer join handles role and profile matching. The broker trace exclusion stays explicit in `exclusions.toml`.
 

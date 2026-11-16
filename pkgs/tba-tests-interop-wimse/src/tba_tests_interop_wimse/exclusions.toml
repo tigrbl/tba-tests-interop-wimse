@@ -1,5 +1,5 @@
 # Exclude incompatible combinations. Expected protocol denials stay in the scenario matrix.
-schema_version = 1
+schema_version = "1.0.0"
 
 [[trace_exclusions]]
 id = "provider-denial-no-release"

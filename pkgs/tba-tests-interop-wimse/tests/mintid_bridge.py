@@ -33,15 +33,21 @@ def observe(path, actor, trace_dir):
         if not accepted or not accepted["accepted"]:
             raise ValueError("MintID verifier never accepted the fresh credential")
         return {"accepted": True, "actor": actor, "reason": accepted["reason_code"],
-                "session_id": accepted["session_id"]}
+                "session_id": accepted["session_id"], "witness_refresh_usable": True}
     result = {"issuer": path_issuer, "kill_switch": path_kill_switch}[path](stack, trace, fixture)
     refusal = result.get("first_no")
     if (not refusal or not result["baseline"]["accepted"] or refusal["accepted"]
             or not refusal.get("confirmed_by") or not result.get("refresh_failed_at")
             or not result.get("carrying_root")):
         raise ValueError("MintID did not attribute a verifier refusal to the requested revocation")
-    return {"accepted": False, "actor": actor, "reason": refusal["reason_code"], "session_id": refusal["session_id"],
-            "revocation_path": path, "refusal_confirmed": True, "witness_refresh_refused": True}
+    return {
+        "accepted": False, "actor": actor, "reason": refusal["reason_code"], "session_id": refusal["session_id"],
+        "revocation_path": path, "refusal_confirmed": True, "witness_refresh_refused": True,
+        "baseline_session_id": result["baseline"]["session_id"],
+        "confirmation_reason": refusal["confirmed_by"],
+        "witness_refresh_refused_at": result["refresh_failed_at"],
+        "carrying_root": result["carrying_root"],
+    }
 
 
 if __name__ == "__main__":

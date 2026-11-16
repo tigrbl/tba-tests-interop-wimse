@@ -1,5 +1,5 @@
 # Factor levels are listed in workbook order.
-schema_version = 1
+schema_version = "1.0.0"
 scope = "Applicability rules for the existing workbook catalog. The count measures tuples allowed by these rules, including deliberate denials. Peer role qualification, multi-fault ordering and per-hop role binding are follow-up dimensions."
 sources = ["wimse-interop-coverage.xlsx / Factor Levels", "wimse-interop-scenario-matrix.md", "wimse-interop-execution-matrix.md"]
 exclusions_file = "exclusions.toml"

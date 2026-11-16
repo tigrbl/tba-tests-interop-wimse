@@ -5,20 +5,15 @@ import csv
 import gzip
 import json
 import sys
-from importlib.resources import files
 from itertools import product
+from pathlib import Path
 
-try:
-    import tomllib
-except ModuleNotFoundError:  # Python 3.10
-    import tomli as tomllib
-
+from .catalog import read_catalog
 from .matrix import generate_matrix
 from .coverage import inventory_report
 from .evidence import audit_pytest_report
 from .hop_matrix import generate_hop_matrix
 from .native_expansion import expanded_plan
-from pathlib import Path
 
 
 def matches(expression, assignment):
@@ -114,13 +109,8 @@ def product_size(domains, keys):
 
 def load_catalog():
     """Load the versioned factor catalog and its companion exclusions."""
-    resources = files("tba_tests_interop_wimse")
-    with resources.joinpath("factors.toml").open("rb") as catalog:
-        model = tomllib.load(catalog)
-    with resources.joinpath(model["exclusions_file"]).open("rb") as exclusion_file:
-        exclusions = tomllib.load(exclusion_file)
-    if model["schema_version"] != 1 or exclusions["schema_version"] != 1:
-        raise ValueError("Unsupported WIMSE interop catalog schema version")
+    model = read_catalog("factors.toml")
+    exclusions = read_catalog(model["exclusions_file"])
     if any("requires" not in rule or "excludes" in rule for rule in model["rules"]):
         raise ValueError("Factor rules must contain requires")
     if any("excludes" not in rule or "requires" in rule for rule in exclusions["rules"]):

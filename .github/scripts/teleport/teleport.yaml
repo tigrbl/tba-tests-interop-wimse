@@ -1,0 +1,14 @@
+version: v3
+teleport:
+  data_dir: /tmp/teleport
+  log:
+    output: stderr
+    severity: WARN
+auth_service:
+  enabled: true
+  cluster_name: example.org
+  listen_addr: 127.0.0.1:3025
+ssh_service:
+  enabled: false
+proxy_service:
+  enabled: false

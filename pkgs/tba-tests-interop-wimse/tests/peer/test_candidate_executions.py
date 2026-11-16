@@ -34,6 +34,7 @@ NATIVE_ISSUER = os.getenv("TBA_WIMSE_NATIVE_ISSUER")
 if not NATIVE_ISSUER and os.getenv("TBA_WIMSE_NATIVE_WIT_ONLY") == "1":
     NATIVE_ISSUER = "tba-wit-svid"
 SELECTED_ID = os.getenv("TBA_WIMSE_EXECUTION_ID")
+SELECTION = os.getenv("TBA_WIMSE_EXECUTION_SELECTION")
 SELECTED_TYPED_ID = bool(SELECTED_ID and SELECTED_ID.startswith("hop-v1:"))
 HOP_PATH_FILTER = os.getenv("TBA_WIMSE_HOP_PATH")
 HOP_PATH = tuple(part.strip() for part in HOP_PATH_FILTER.split(",")) if HOP_PATH_FILTER else ()
@@ -153,12 +154,33 @@ def pytest_generate_tests(metafunc):
 
 
 def select_executions(rows, selected):
+    if SELECTION:
+        identifiers = execution_selection()
+        return [row for row in rows if row["id"] in identifiers]
     if selected is None:
         return rows
     matches = [row for row in rows if row["id"] == selected]
     if not matches:
         raise pytest.UsageError(f"Unknown execution ID: {selected}")
     return matches
+
+
+@lru_cache(maxsize=1)
+def execution_selection():
+    if not NATIVE or SELECTED_ID or HOP_PATH:
+        raise pytest.UsageError("An execution selection requires the full expanded matrix")
+    selected = json.loads(Path(SELECTION).read_text(encoding="utf-8"))
+    if not isinstance(selected, list) or not all(isinstance(item, str) for item in selected):
+        raise pytest.UsageError("An execution selection must be a JSON array of execution IDs")
+    identifiers = set(selected)
+    inventory = execution_inventory()
+    available = {
+        row["id"] for group in ("workload_executions", "planned_executions")
+        for row in inventory[group]
+    }
+    if not selected or len(identifiers) != len(selected) or identifiers - available:
+        raise pytest.UsageError("Execution selection is empty, duplicated, or outside the runtime inventory")
+    return identifiers
 
 
 def report_result(result, record_property):
