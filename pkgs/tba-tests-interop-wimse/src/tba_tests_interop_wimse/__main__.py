@@ -3,6 +3,7 @@
 import argparse
 import csv
 import gzip
+from io import TextIOWrapper
 import json
 import sys
 from itertools import product
@@ -132,7 +133,32 @@ def main():
                         help="audit per-execution results and require every candidate to pass")
     parser.add_argument("--peer-snapshot", type=Path, help="audit against an explicit lab qualification snapshot")
     parser.add_argument("--frozen-manifest", type=Path, help="read the published compressed execution inventory")
+    parser.add_argument("--extend-frozen-manifest", type=Path,
+                        help="add the RICH roles and nine-hop success bindings to the 142,844-ID baseline")
+    parser.add_argument("--output", type=Path, help="new gzip manifest path for --extend-frozen-manifest")
     options = parser.parse_args()
+    if options.extend_frozen_manifest:
+        if options.output is None or any((
+            options.frozen_manifest, options.expand_hops, options.hop_matrix, options.legacy_count,
+            options.peer_snapshot, options.coverage, options.attempts, options.include_candidates,
+            options.include_native, options.audit_peer_junit, options.json,
+        )):
+            parser.error("--extend-frozen-manifest requires --output and cannot be combined with another report")
+        from .rich_expansion import extend_frozen_manifest
+
+        try:
+            manifest = extend_frozen_manifest(options.extend_frozen_manifest)
+            with options.output.open("xb") as raw:
+                with gzip.GzipFile(filename="", fileobj=raw, mode="wb", mtime=0) as compressed:
+                    with TextIOWrapper(compressed, encoding="utf-8", newline="\n") as stream:
+                        json.dump(manifest, stream, separators=(",", ":"))
+                        stream.write("\n")
+            print(json.dumps({"total_runs": manifest["total_runs"], **manifest["additive_expansion"]}))
+        except (ValueError, KeyError, OSError) as error:
+            parser.error(str(error))
+        return
+    if options.output:
+        parser.error("--output requires --extend-frozen-manifest")
     if options.frozen_manifest:
         if any((options.expand_hops, options.hop_matrix, options.legacy_count, options.peer_snapshot,
                 options.coverage, options.attempts, options.include_candidates, options.include_native)):

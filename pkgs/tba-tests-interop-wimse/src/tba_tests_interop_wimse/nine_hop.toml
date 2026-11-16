@@ -1,0 +1,168 @@
+schema_version = "1.0.0"
+id = "ietf127-b-chain"
+name = "IETF 127 nine-hop cross-domain success"
+revision = "49d29ca31d248af4a169176969e712c673f11ef9"
+reference = "https://github.com/apelov/IETF127-Hackathon-AI2II-WIMSE/blob/49d29ca31d248af4a169176969e712c673f11ef9/validation/opus-chain-review.md"
+expected_assignments = 12288
+expected_colocated_assignments = 3072
+initial_input = "Domain A user request for an in-scope file with enrolled workloads and explicit cross-domain trust"
+expected_result = "protected-file-read-authorized"
+expected_effects = 1
+colocated_roles = [["issuer-a", "exchange-a"], ["exchange-b", "issuer-b"]]
+
+[success_oracle]
+http_statuses = [200, 200, 200, 200, 200, 200, 200, 200, 200]
+ingress_state = "completed"
+ingress_count = 11
+ingress_uppercase = "HELLO WIMSE"
+research_summary = "$4.2M"
+protected_file = "Q3.pdf"
+initial_scope = ["files:read", "files:list"]
+final_scope = ["files:read"]
+same_transaction_id = true
+require_wit_and_transaction_hashes = true
+domain_a_transaction_token_in_domain_b = false
+
+[pin_overrides.agentmaurice]
+version = "c9ae5757e9d97ec8fa6b9fc9e6b835c63eba770b"
+configuration = "agentmaurice-v2.2.18-workflow-loopback-v1"
+
+[exclusion_reasons]
+agentmaurice = "The pinned workflow caller refuses an explicitly supplied Txn-Token in both proof modes."
+authgent = "The pinned issuer emits req_wl=client:<id> and does not consume a prior transaction token for narrowing."
+
+[[roles]]
+id = "driver"
+demo = "driver"
+proofs = { caller = "wit-http-signature" }
+exclude = ["agentmaurice"]
+qualification = "Maintain one WIMSE identity across the signed ingress, source exchange, and Coordinator requests. Cover the exact body and the applicable authorization header."
+
+[[roles]]
+id = "issuer-a"
+demo = "domain-a"
+support_role = "transaction-token-issuer"
+exclude = ["authgent"]
+qualification = "Issue a txntoken+jwt with the requested subject, scope and file context, the ingress audience, and req_wl equal to the driver's WIT subject."
+
+[[roles]]
+id = "ingress"
+proofs = { receiver = "wit-http-signature" }
+qualification = "Verify the driver, proof and bound Domain A token, authorize the operation, and complete the text-stats workflow."
+
+[[roles]]
+id = "exchange-a"
+demo = "domain-a"
+proofs = { receiver = "wit-http-signature" }
+native_roles = ["token-client", "token-issuer"]
+qualification = "Verify the signed request and Domain A token, preserve the transaction ID and scope, and issue a jwt-chg+jwt assertion to the exact Domain B exchange audience."
+
+[[roles]]
+id = "exchange-b"
+demo = "domain-b"
+native_roles = ["token-client", "token-issuer"]
+qualification = "Verify the source issuer, grant type, audience and scope, then mint an at+jwt for the Coordinator and Research without receiving the original Domain A transaction token."
+
+[[roles]]
+id = "coordinator"
+rich = "coordinator"
+proofs = { caller = "wit-http-signature", receiver = "wit-http-signature" }
+exclude = ["agentmaurice"]
+qualification = "Receive the signed request with the Domain B access token, obtain T_B1 bound to the Coordinator, and call Research with T_B1 covered by the signature."
+
+[[roles]]
+id = "issuer-b"
+demo = "domain-b"
+support_role = "transaction-token-issuer"
+exclude = ["authgent"]
+qualification = "Use one issuer instance for both calls. Issue T_B1 from the Domain B access token, then accept it for replacement and issue T_B2 with the same transaction ID, narrower scope and Research workload binding."
+
+[[roles]]
+id = "research"
+rich = "research"
+proofs = { caller = "wit-wpt", receiver = "wit-http-signature" }
+exclude = ["agentmaurice"]
+qualification = "Verify the Coordinator's signed request and T_B1, obtain narrower T_B2, call the File Tool with WPT binding both WIT and T_B2, and return the expected summary."
+
+[[roles]]
+id = "file-tool"
+demo = "file-tool"
+proofs = { receiver = "wit-wpt" }
+qualification = "Verify the WPT hashes, resource audience, Research identity, transaction scope and file context. Observe exactly one authorized protected read."
+
+[[hops]]
+operation = "domain-a-issue"
+type = "token-exchange"
+caller = "driver"
+receiver = "issuer-a"
+input = "user, file and scope"
+output = "T_A"
+
+[[hops]]
+operation = "ingress-workflow"
+type = "workload-call"
+caller = "driver"
+receiver = "ingress"
+profile = "wit-http-signature"
+input = "T_A and signed workflow request"
+output = "completed text-stats result"
+
+[[hops]]
+operation = "source-exchange"
+type = "token-exchange"
+caller = "driver"
+receiver = "exchange-a"
+profile = "wit-http-signature"
+input = "T_A in the signed token exchange body"
+output = "Domain B audience-bound assertion"
+
+[[hops]]
+operation = "destination-exchange"
+type = "token-exchange"
+caller = "driver"
+receiver = "exchange-b"
+input = "cross-domain assertion"
+output = "AT_B"
+
+[[hops]]
+operation = "coordinate"
+type = "workload-call"
+caller = "driver"
+receiver = "coordinator"
+profile = "wit-http-signature"
+input = "AT_B bound to the signed request"
+output = "research summary"
+
+[[hops]]
+operation = "domain-b-issue"
+type = "token-exchange"
+caller = "coordinator"
+receiver = "issuer-b"
+input = "AT_B"
+output = "T_B1 bound to the Coordinator"
+
+[[hops]]
+operation = "research"
+type = "workload-call"
+caller = "coordinator"
+receiver = "research"
+profile = "wit-http-signature"
+input = "T_B1 bound to the signed request"
+output = "file summary"
+
+[[hops]]
+operation = "domain-b-narrow"
+type = "token-exchange"
+caller = "research"
+receiver = "issuer-b"
+input = "T_B1 and narrower scope"
+output = "T_B2 bound to Research"
+
+[[hops]]
+operation = "protected-file-read"
+type = "workload-call"
+caller = "research"
+receiver = "file-tool"
+profile = "wit-wpt"
+input = "T_B2 and WIT bound to the WPT"
+output = "one authorized file read"

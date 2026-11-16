@@ -15,6 +15,8 @@ This interoperability project contains the WIMSE scenario definitions, peer exec
 | [Full runtime closure plan](matrix/wimse-runtime-closure-plan.md) | Counted delivery tranches and evidence required for the 142,844-ID inventory |
 | [Per-ID blocker report](matrix/wimse-interop-per-id-blockers.csv.gz) | Runtime and published IDs, historical evidence, and binding gaps |
 | [External peer access](matrix/wimse-external-peer-access.md) | Public artifacts and sandbox dependencies for proposed peers |
+| [RICH and nine-hop candidate inventory](matrix/wimse-interop-rich-nine-hop-executions.json.gz) | The 161,370-ID additive matrix |
+| [Nine-hop qualification](matrix/wimse-interop-rich-nine-hop-qualification.md) | Generation command and contracts for running the named success case |
 
 From this package directory, run `uv run tba-tests-interop-wimse`. After installing the wheel, run `tba-tests-interop-wimse` or `python -m tba_tests_interop_wimse`. The command loads the TOML files from the installed package.
 

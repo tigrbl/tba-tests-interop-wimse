@@ -37,6 +37,14 @@ export NATS_URL=nats://127.0.0.1:4222
 export AUTH_HANKO_JWKS_URL=http://127.0.0.1:18089
 export AUTH_OIDC_JWKS_URL=http://127.0.0.1:18089
 export DENO_CERT=/tmp/receiver-ca.pem DENO_TLS_CA_STORE=system
+audience=https://receiver.example.org
+peer_domain=example.org
+peer_workload=tba-workload
+if [ "${TBA_AGENTMAURICE_NINE_HOP:-}" = 1 ]; then
+  audience=http://maurice.ietf127.example:5050
+  peer_domain=peer.ietf127.example
+  peer_workload=client
+fi
 deno eval 'Deno.serve({hostname:"127.0.0.1",port:18089},()=>Response.json({keys:[]}));'   >/tmp/control-plane-jwks.log 2>&1 &
 jwks_pid=$!
 serve_pid=
@@ -48,14 +56,14 @@ trap cleanup EXIT
 trap 'exit 143' TERM
 trap 'exit 130' INT
 
-cat > /tmp/one/config/standalone.yaml <<'YAML'
+cat > /tmp/one/config/standalone.yaml <<YAML
 wimse:
   enabled: true
   trust_domain: example.org
   issuer:
     iss: https://issuer.example.org
   inbound:
-    audiences: [https://receiver.example.org]
+    audiences: [$audience]
 YAML
 
 maurice_cli() {
@@ -92,7 +100,7 @@ kill "$serve_pid"
 wait "$serve_pid" || true
 cat >> /tmp/one/config/standalone.yaml <<YAML
     grants:
-      - holder: workload:wimse://example.org/tba-workload
+      - holder: workload:wimse://$peer_domain/$peer_workload
         agent: $agent
         workflow: text-stats
 YAML
@@ -108,9 +116,12 @@ YAML
 done
 cat >> /tmp/one/config/standalone.yaml <<YAML
   trust:
-    - trust_domain: example.org
+    - trust_domain: $peer_domain
       jwks_file: /tmp/tba-issuer.jwks.json
 YAML
+if [ "${TBA_AGENTMAURICE_NINE_HOP:-}" = 1 ]; then
+  printf '      issuers: [http://peer.ietf127.example]\n' >> /tmp/one/config/standalone.yaml
+fi
 start /tmp/grant-serve.log
 touch /tmp/lab-ready
 wait "$serve_pid"

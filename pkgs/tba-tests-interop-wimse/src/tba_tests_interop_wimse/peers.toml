@@ -92,6 +92,24 @@ candidate_endpoint_profiles = [
 reference = "https://mailarchive.ietf.org/arch/msg/wimse/6ofJ6o3sK9H_XEPCQWn_7SVEza4/"
 qualification_gap = "The v2.2.18 release advertises WIT with WPT and HTTP signatures. Verify the interoperable request interface and both directional bindings before qualifying these roles."
 
+[implementations.rich-hackathon]
+name = "RICH IETF 127 workload services"
+entity_types = ["workload"]
+candidate_revision = "49d29ca31d248af4a169176969e712c673f11ef9"
+reference = "https://github.com/apelov/IETF127-Hackathon-AI2II-WIMSE/blob/49d29ca31d248af4a169176969e712c673f11ef9/peers/domain_b.py"
+
+[implementations.rich-hackathon.workload_roles.coordinator]
+identity = "wimse://rich.ietf127.example/agent/coordinator"
+caller_profiles = ["wit-http-signature"]
+receiver_profiles = ["wit-http-signature"]
+wit_issuers = ["baseline"]
+
+[implementations.rich-hackathon.workload_roles.research]
+identity = "wimse://rich.ietf127.example/agent/research"
+caller_profiles = ["wit-wpt"]
+receiver_profiles = ["wit-http-signature"]
+wit_issuers = ["baseline"]
+
 [implementations.teleport-tbot]
 name = "Teleport tbot"
 entity_types = ["credential-delivery-service"]

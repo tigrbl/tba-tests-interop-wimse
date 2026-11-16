@@ -1,0 +1,54 @@
+name: WIMSE nine-hop interoperability
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  INTEROP_PACKAGE: pkgs/tba-tests-interop-wimse
+
+jobs:
+  execute:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          repository: apelov/IETF127-Hackathon-AI2II-WIMSE
+          ref: 49d29ca31d248af4a169176969e712c673f11ef9
+          path: .interop/ietf127
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.12.13'
+      - name: Install capture and peer dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo env DEBIAN_FRONTEND=noninteractive apt-get install -yq tcpdump tshark
+          python -m pip install 'cryptography==50.0.2'
+          bash .github/scripts/fetch-agentmaurice.sh "$RUNNER_TEMP/maurice"
+      - name: Execute pinned success trace in a private network namespace
+        run: |
+          mkdir -m 700 "$RUNNER_TEMP/nine-hop"
+          bash .github/scripts/run-nine-hop.sh "$GITHUB_WORKSPACE/.interop/ietf127"             "$RUNNER_TEMP/maurice" "$GITHUB_WORKSPACE/$INTEROP_PACKAGE" "$RUNNER_TEMP/nine-hop"
+      - name: Audit observations and reconcile all execution IDs
+        if: always()
+        run: |
+          options=()
+          scratch="$RUNNER_TEMP/nine-hop"
+          if [[ -f "$scratch/driver-exit" ]]; then
+            options=(--upstream .interop/ietf127 --capture "$scratch/chain.pcap"
+                     --driver-exit "$(cat "$scratch/driver-exit")")
+          fi
+          python "$INTEROP_PACKAGE/tests/ci_nine_hop.py" report             "$INTEROP_PACKAGE/matrix/wimse-interop-rich-nine-hop-executions.json.gz"             nine-hop-results "${options[@]}"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: nine-hop-results
+          path: nine-hop-results/
+          if-no-files-found: error
