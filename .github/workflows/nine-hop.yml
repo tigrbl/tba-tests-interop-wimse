@@ -2,17 +2,87 @@ name: WIMSE nine-hop interoperability
 
 on:
   workflow_dispatch:
+    inputs:
+      shards:
+        description: Number of hosted Ubuntu shards
+        type: choice
+        default: '16'
+        options: ['4', '8', '16', '32']
 
 permissions:
   contents: read
 
 env:
   INTEROP_PACKAGE: pkgs/tba-tests-interop-wimse
+  MANIFEST: pkgs/tba-tests-interop-wimse/matrix/wimse-interop-rich-nine-hop-executions.json.gz
 
 jobs:
-  execute:
+  prepare:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 15
+    outputs:
+      shards: ${{ steps.plan.outputs.shards }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          repository: cofide/wimse-s2s-httpsig-poc
+          ref: 7984a60105002dc65b31e9cd08572cd5d10ed9d6
+          path: .interop/cofide
+          persist-credentials: false
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          repository: tigrbl/tigrbl_auth
+          ref: c12980ae00260c356ced82f57fa92238a2b9f02a
+          path: .interop/tba
+          sparse-checkout: pkgs/20-providers/tba-provider-replay-memory
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.12.13'
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version: '1.25.3'
+          cache: false
+      - name: Build pinned runtime assets
+        run: |
+          python -m pip wheel --wheel-dir .interop/assets/wheels "./$INTEROP_PACKAGE[wpt]" \
+            .interop/tba/pkgs/20-providers/tba-provider-replay-memory 'cryptography==50.0.2'
+          bash .github/scripts/fetch-agentmaurice.sh .interop/assets/maurice
+          mkdir .interop/cofide-build
+          cp .interop/cofide/{go.mod,go.sum} "$INTEROP_PACKAGE/tests/support/nine_hop_cofide_bridge.go" .interop/cofide-build/
+          (
+            cd .interop/cofide-build
+            go mod edit -module=interop-ci.invalid/cofide-nine-hop \
+              -require=github.com/cofide/wimse-s2s-httpsig-poc@v0.0.0 \
+              -replace=github.com/cofide/wimse-s2s-httpsig-poc=../cofide
+            go build -mod=mod -o ../assets/cofide-bridge .
+          )
+          tar -czf nine-hop-runtime.tgz -C .interop/assets .
+      - id: plan
+        env:
+          SHARDS: ${{ inputs.shards || '16' }}
+        run: |
+          python -c 'import json, sys; print("shards=" + json.dumps(list(range(int(sys.argv[1])))))' "$SHARDS" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: nine-hop-runtime
+          path: nine-hop-runtime.tgz
+          if-no-files-found: error
+
+  execute:
+    needs: prepare
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ${{ fromJSON(needs.prepare.outputs.shards) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 80
+    env:
+      SHARD: ${{ matrix.shard }}
+      SHARDS: ${{ inputs.shards || '16' }}
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
@@ -23,29 +93,71 @@ jobs:
           ref: 49d29ca31d248af4a169176969e712c673f11ef9
           path: .interop/ietf127
           persist-credentials: false
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          repository: cred-ninja/sdk
+          ref: 586e1a76f487c2376e0ba0a4687bb2de8d3eb588
+          path: .interop/cred
+          persist-credentials: false
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: '3.12.13'
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5ba9c38 # v6
+        with:
+          node-version: '24.18.0'
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: nine-hop-runtime
+          path: .interop/runtime
       - name: Install capture and peer dependencies
         run: |
           sudo apt-get update -qq
           sudo env DEBIAN_FRONTEND=noninteractive apt-get install -yq tcpdump tshark
-          python -m pip install 'cryptography==50.0.2'
-          bash .github/scripts/fetch-agentmaurice.sh "$RUNNER_TEMP/maurice"
-      - name: Execute pinned success trace in a private network namespace
+          mkdir -p .interop/assets
+          tar -xzf .interop/runtime/nine-hop-runtime.tgz -C .interop/assets
+          python -m pip install --no-input --no-index --no-deps .interop/assets/wheels/*.whl
+          python -m pip check
+      - name: Execute ninety-four possible directed handoffs across the assigned flows
         run: |
           mkdir -m 700 "$RUNNER_TEMP/nine-hop"
-          bash .github/scripts/run-nine-hop.sh "$GITHUB_WORKSPACE/.interop/ietf127"             "$RUNNER_TEMP/maurice" "$GITHUB_WORKSPACE/$INTEROP_PACKAGE" "$RUNNER_TEMP/nine-hop"
-      - name: Audit observations and reconcile all execution IDs
+          export TBA_WIMSE_CRED_CHECKOUT="$GITHUB_WORKSPACE/.interop/cred"
+          export TBA_WIMSE_NINE_HOP_COFIDE_BRIDGE="$GITHUB_WORKSPACE/.interop/assets/cofide-bridge"
+          bash .github/scripts/run-nine-hop.sh "$GITHUB_WORKSPACE/.interop/ietf127" \
+            "$GITHUB_WORKSPACE/.interop/assets/maurice" "$GITHUB_WORKSPACE/$INTEROP_PACKAGE" \
+            "$RUNNER_TEMP/nine-hop" "$GITHUB_WORKSPACE/$MANIFEST" "$SHARD" "$SHARDS"
+      - name: Audit the private capture and write one result per assigned ID
         if: always()
         run: |
-          options=()
           scratch="$RUNNER_TEMP/nine-hop"
-          if [[ -f "$scratch/driver-exit" ]]; then
-            options=(--upstream .interop/ietf127 --capture "$scratch/chain.pcap"
-                     --driver-exit "$(cat "$scratch/driver-exit")")
-          fi
-          python "$INTEROP_PACKAGE/tests/ci_nine_hop.py" report             "$INTEROP_PACKAGE/matrix/wimse-interop-rich-nine-hop-executions.json.gz"             nine-hop-results "${options[@]}"
+          python "$INTEROP_PACKAGE/tests/ci_nine_hop_matrix.py" audit \
+            "$MANIFEST" .interop/ietf127 "$scratch/observations.jsonl" "$SHARD" "$SHARDS" \
+            "$scratch/chain.pcap" results.jsonl
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: nine-hop-shard-${{ matrix.shard }}
+          path: results.jsonl
+          if-no-files-found: error
+
+  report:
+    needs: execute
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.12.13'
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          pattern: nine-hop-shard-*
+          path: shards
+      - name: Reconcile and report all 12,288 IDs
+        run: |
+          python "$INTEROP_PACKAGE/tests/ci_nine_hop_matrix.py" aggregate "$MANIFEST" shards nine-hop-results
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with:

@@ -1,6 +1,6 @@
 """Run the pinned success driver and check its observed HTTP handoffs."""
 import argparse
-from collections import Counter
+from collections import Counter, defaultdict
 import csv
 import gzip
 from itertools import product
@@ -9,6 +9,7 @@ from pathlib import Path
 import re
 import subprocess
 import sys
+from urllib.parse import urlsplit
 
 
 SCENARIO = "ietf127-b-chain"
@@ -20,26 +21,31 @@ ROUTES = (
 )
 
 
-def run_reference(upstream, agent):
+def load_driver(upstream, agent, port=5000):
     if not re.fullmatch(r"[a-z0-9]+", agent):
         raise ValueError("Invalid disposable workflow deployment identifier")
     sys.path.insert(0, str(upstream / "peers"))
-    import domain_a
-    import domain_b
-
     # The fixture hardcodes the author's deployment and HTTP socket. Bind only
     # those two addresses at signing time. Retain its pinned WIMSE audience.
     driver_path = upstream / "peers/chain_driver.py"
     driver = {"__name__": "pinned_chain", "__file__": str(driver_path)}
     original = "http://127.0.0.1:5050/api/v2/agents/dbsccjan18nkaiapu9v0/"
     source = driver_path.read_text(encoding="utf-8").replace(
-        original, f"http://127.0.0.1:5000/api/v2/agents/{agent}/"
+        original, f"http://127.0.0.1:{port}/api/v2/agents/{agent}/"
     )
     exec(compile(source, str(driver_path), "exec"), driver)
+    return driver["run_b_chain"]
+
+
+def run_reference(upstream, agent):
+    driver = load_driver(upstream, agent)
+    import domain_a
+    import domain_b
+
     server_a = domain_a.start_in_thread(5051)
     servers_b = domain_b.start_all_in_threads()
     try:
-        succeeded, _, _ = driver["run_b_chain"](True)
+        succeeded, _, _ = driver(True)
         if not succeeded:
             # The captured statuses provide diagnostics without exposing tokens.
             print("Pinned driver did not reach its success outcome", file=sys.stderr)
@@ -50,18 +56,18 @@ def run_reference(upstream, agent):
         server_a.shutdown()
 
 
-def wire_results(upstream, capture, oracle):
+def decode_capture(upstream, capture):
     sys.path.insert(0, str(upstream / "checkers"))
     import observes_chain as wire
 
     cmd = ["tshark", "-n", "-r", "-"]
-    for port in sorted({port for port, _ in ROUTES}):
+    for port in sorted({5002, *(port for port, _ in ROUTES)}):
         cmd.extend(["-d", f"tcp.port=={port},http"])
     cmd.extend(["-Y", "http", "-T", "json"])
     with capture.open("rb") as stream:
-        packets = json.loads(subprocess.check_output(cmd, stdin=stream, text=True, timeout=60),
+        packets = json.loads(subprocess.check_output(cmd, stdin=stream, text=True, timeout=180),
                              object_pairs_hook=wire._collect_duplicates)
-    requests, responses = {}, {}
+    requests, responses = defaultdict(dict), {}
     for packet in packets:
         layers = packet["_source"]["layers"]
         tcp, http = layers["tcp"], layers["http"]
@@ -76,10 +82,19 @@ def wire_results(upstream, capture, oracle):
                     headers[name.lower()] = value.strip()
             if "http.authorization" in http:
                 headers.setdefault("authorization", wire._first_str(http["http.authorization"]))
-            if headers.get("x-test-case") == "B_CHAIN":
-                requests[sid] = (int(tcp["tcp.dstport"]), http, headers)
+            if case := headers.get("x-test-case"):
+                requests[case][sid] = (int(tcp["tcp.dstport"]), http, headers)
         elif wire._extract_status(http):
             responses[sid] = http
+    return wire, requests, responses
+
+
+def wire_results(upstream, capture, oracle):
+    wire, requests, responses = decode_capture(upstream, capture)
+    return check_case(wire, requests.get("B_CHAIN", {}), responses, oracle, ROUTES)
+
+
+def check_case(wire, requests, responses, oracle, routes):
     observed = list(requests.items())
     statuses = [wire._extract_status(responses.get(sid, {})) for sid, _ in observed]
     problems = []
@@ -95,9 +110,9 @@ def wire_results(upstream, capture, oracle):
         return next((wire._first_str(value[key]) for value in http.values()
                      if isinstance(value, dict) and key in value), "")
 
-    require(len(observed) == len(ROUTES), "Expected exactly nine tagged HTTP requests")
-    for (_, (port, http, _)), (want_port, path) in zip(observed, ROUTES):
-        require(port == want_port and request_field(http, "http.request.uri").endswith(path),
+    require(len(observed) == len(routes), "Expected exactly nine tagged HTTP requests")
+    for (_, (port, http, _)), (want_port, path) in zip(observed, routes):
+        require(port == want_port and urlsplit(request_field(http, "http.request.uri")).path.endswith(path),
                 f"Unexpected route for expected endpoint {want_port}{path}")
         require(request_field(http, "http.request.method") == "POST", "Expected HTTP POST")
     require(statuses == oracle["http_statuses"], "Unexpected hop response status")
@@ -157,11 +172,15 @@ def wire_results(upstream, capture, oracle):
     return {"statuses": statuses, "problems": problems}
 
 
-def report(manifest, output, observation):
+def read_manifest(manifest):
     with gzip.open(manifest, "rt", encoding="utf-8") as stream:
         inventory = json.load(stream)
     scenario = inventory["named_scenarios"][SCENARIO]
     rows = [row for row in inventory["planned_executions"] if row.get("named_scenario_id") == SCENARIO]
+    return scenario, rows
+
+
+def reference_pins(scenario):
     by_role = scenario["role_candidates"]
     pins = {}
     for definition in scenario["roles"]:
@@ -177,6 +196,23 @@ def report(manifest, output, observation):
             raise ValueError(f"Reference runtime binding is missing for {role}")
         if list(pins[role]) not in by_role[role]:
             raise ValueError(f"Reference runtime binding for {role} is absent from the inventory")
+    return pins
+
+
+def assignment_for(row):
+    assignment = {}
+    for hop in row["hops"]:
+        for side in ("caller", "receiver"):
+            role, pin = hop[side], tuple(hop[f"{side}_pin"])
+            if assignment.setdefault(role, pin) != pin:
+                raise ValueError(f"Inconsistent repeated role binding in {row['id']}")
+    return assignment
+
+
+def report(manifest, output, observation):
+    scenario, rows = read_manifest(manifest)
+    by_role = scenario["role_candidates"]
+    pins = reference_pins(scenario)
     verdict = observation["status"]
     qualified = verdict == "pass"
     output.mkdir(parents=True, exist_ok=True)
@@ -198,12 +234,7 @@ def report(manifest, output, observation):
         writer = csv.writer(stream)
         writer.writerow(["execution_id", "status", "missing_runtime_roles", "reason"])
         for row in rows:
-            assignment = {}
-            for hop in row["hops"]:
-                for side in ("caller", "receiver"):
-                    role, pin = hop[side], tuple(hop[f"{side}_pin"])
-                    if assignment.setdefault(role, pin) != pin:
-                        raise ValueError(f"Inconsistent repeated role binding in {row['id']}")
+            assignment = assignment_for(row)
             actual_assignments.add(tuple(assignment[role] for role in by_role))
             ids.add(row["id"])
             missing = [f"{role}={assignment[role][0]}" for role in by_role if assignment[role] != pins[role]]
