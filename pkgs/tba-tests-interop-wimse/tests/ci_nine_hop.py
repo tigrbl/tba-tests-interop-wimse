@@ -88,11 +88,18 @@ def wire_results(upstream, capture, oracle):
         if not condition:
             problems.append(message)
 
+    def request_field(http, key):
+        # tshark nests the method and URI under the request-line tree.
+        if key in http:
+            return wire._first_str(http[key])
+        return next((wire._first_str(value[key]) for value in http.values()
+                     if isinstance(value, dict) and key in value), "")
+
     require(len(observed) == len(ROUTES), "Expected exactly nine tagged HTTP requests")
     for (_, (port, http, _)), (want_port, path) in zip(observed, ROUTES):
-        require(port == want_port and wire._first_str(http.get("http.request.uri")).endswith(path),
+        require(port == want_port and request_field(http, "http.request.uri").endswith(path),
                 f"Unexpected route for expected endpoint {want_port}{path}")
-        require(wire._first_str(http.get("http.request.method")) == "POST", "Expected HTTP POST")
+        require(request_field(http, "http.request.method") == "POST", "Expected HTTP POST")
     require(statuses == oracle["http_statuses"], "Unexpected hop response status")
     if problems:
         return {"statuses": statuses, "problems": problems}
