@@ -8,6 +8,86 @@ A **structural scenario** selects a topology, scenario variant, and applicable a
 
 A **peer** is an implementation bound to a participant. Its capability is specific to a role and profile, such as receiving WIT/WPT or delivering an X.509-SVID. A directional control qualifies one pinned caller and receiver pairing. For the full lookup, see the [peer capability reference](pkgs/tba-tests-interop-wimse/matrix/wimse-interop-peers.md), [authentication and peer assignments](pkgs/tba-tests-interop-wimse/matrix/wimse-interop-guide.md#authentication-and-peer-assignments), and [named nine-hop substitutions](pkgs/tba-tests-interop-wimse/matrix/wimse-interop-rich-nine-hop-qualification.md#role-substitutions).
 
+## Entities, peers, roles, and capabilities
+
+A **participant** is a node in a flow, such as `workload-0`, a gateway, or an issuer. Its **entity type** tells you what it is. Its **role** tells you what it does on a particular hop. A **peer** is the concrete implementation bound to a participant. Two participants may use the same implementation, for example two independently configured TbA workloads.
+
+| Entity type | Example roles | Example bindings |
+|---|---|---|
+| Workload | Caller, receiver, delegator, delegate, token client, credential requester, policy client | TbA, wimsey, Cred, Cofide, go-spiffe, Defakto, AgentMaurice |
+| Delegation authority | Delegation authority | TbA delegation fixture |
+| Token service | Token issuer, transaction-token issuer | TbA token fixture, authgent |
+| Credential delivery service | Credential delivery | SPIRE Workload API, Teleport tbot, TbA Workload API |
+| Status and policy service | Status authority, before-effect enforcer, receipt verifier, approval verifier | TbA policy fixtures, MintID, EMILIA, Redthread, OmniArx |
+
+The matrix uses one [peer catalog](pkgs/tba-tests-interop-wimse/src/tba_tests_interop_wimse/peers.toml) for TbA and external implementations. The tables below group capabilities by hop role. An implementation can appear in more than one group when it fills multiple roles. For example, go-spiffe acts as a workload caller, a workload receiver, and a credential requester.
+
+A workload-call capability specifies the role, authentication profile, WIC identifier scheme, version, and configuration. A directional baseline records the exact caller and receiver tested together. Other hops have role-specific bindings and runtime evidence.
+
+### Peers and evidence
+
+The [peer catalog](pkgs/tba-tests-interop-wimse/src/tba_tests_interop_wimse/peers.toml) lists candidate roles and profiles. The hosted qualification artifacts record the exact implementation, pin, configuration, direction, and evidence. Use the [nine-hop substitution table](pkgs/tba-tests-interop-wimse/matrix/wimse-interop-rich-nine-hop-qualification.md#role-substitutions) for the role choices and the manifest's `named_scenarios.ietf127-b-chain.role_candidates` for their exact pins.
+
+| Peer or fixture | Runtime scope in the hosted suite |
+| --- | --- |
+| TbA | Native baseline cases, generic RICH companion endpoints, and all nine named role choices |
+| RICH Coordinator | WIT with HTTP Message Signatures in both directions with TbA for generic cases. Coordinator in the named chain |
+| RICH Research | Receives TbA HTTP Message Signatures with a WIT and calls TbA with WIT/WPT for generic cases. Research in the named chain |
+| Cofide | Pinned Go signature bridge. Driver, Ingress, and Coordinator in the named chain using the signed-audience compatibility overlay |
+| Cred | Pinned WIT/WPT and HTTP-signature adapters. Driver, Ingress, Coordinator, Research, and File Tool in the named chain |
+| AgentMaurice | Named Ingress and File Tool receivers. Generic coverage is limited by the selected SPIRE WIT-SVID/proof-key and outbound transaction-signature bindings |
+| IETF 127 demo | Reference Driver, Domain A and B token services, and File Tool |
+| wimsey, Defakto, go-spiffe | Pinned proof or mutual-TLS components in the shared HTTPS lab as configured by profile |
+| Teleport tbot | Hosted Workload API X.509-SVID delivery and mTLS handoff |
+| MintID, EMILIA | Hosted status and before-effect controls within the configured fixtures |
+| Authgent | Pinned transaction-token cases in the original matrix. Named nine-hop issuer requirements are tracked separately |
+| Redthread, OmniArx | Blocked rows remain in the inventory pending runnable bindings for the reported verifier and support operations |
+
+[Generic RICH qualification](https://github.com/tigrbl/tba-tests-interop-wimse/actions/runs/44021013592/artifacts/14304893080) records the four live directional controls. The named nine-hop report's `qualification.json` maps each role binding and each directional handoff to a passing execution ID. The named and generic scopes have different fixture contracts and pins.
+
+### Workload calls
+
+Seven implementations fill workload-call roles. Two additional catalog slots for combined authentication resolve to wimsey in the lab. The WIC identifiers below apply to the TLS certificate. WIT supplies the application credential, and WPT or HTTP Message Signatures supply its proof. [Pinned sources and directional controls](pkgs/tba-tests-interop-wimse/matrix/wimse-interop-peers.md#workload-calls)
+
+| Peer or slot | Workload roles | Authentication profiles | WIC identifiers | Runtime scope |
+| --- | --- | --- | --- | --- |
+| TbA (`tba`) | Caller and receiver | WIC/mTLS, WIT + WPT, WIT + HTTP Message Signatures, and WIC/mTLS combined with either proof | WIMSE and SPIFFE where WIC is used | Includes TbA-to-TbA and multi-hop cases, plus native X.509-SVID and WIT-SVID controls. |
+| wimsey (`wimsey`) | Caller and receiver | WIC/mTLS | WIMSE and SPIFFE | The shared TLS lab exercises the wimsey WIC verifier in both directions against TbA. |
+| Cred (`cred`) | Caller and receiver | WIT + WPT and WIT + HTTP Message Signatures | — | The WPT lab covers SPIRE-issued WIT-SVID. The signature lab covers direct requests and transaction binding with a lab-issued WIT. |
+| Cofide WIMSE PoC (`cofide`) | Caller and receiver | WIT + HTTP Message Signatures | — | A bridge adapts the PoC signing profile for the tested TbA pairings. |
+| Combined WPT slot (`combined-wpt-candidate`) | Caller and receiver | WIC/mTLS + WIT/WPT | WIMSE and SPIFFE | Composes the wimsey WIC verifier and WPT bridge in the shared HTTPS lab. |
+| Combined signature slot (`combined-signature-candidate`) | Caller and receiver | WIC/mTLS + WIT/HTTP Message Signatures | WIMSE and SPIFFE | Composes the wimsey WIC and HTTP signature components in the shared HTTPS lab. |
+| go-spiffe (`go-spiffe`) | Caller and receiver in the shared mTLS fixture | WIC/mTLS | SPIFFE | Exercises direct-CA and SPIRE credentials in both directions. |
+| Defakto (`defakto`) | Caller and receiver in the shared mTLS fixture | WIC/mTLS | SPIFFE | Both directions exercise the SDK verifier with direct-CA and SPIRE-issued credentials. |
+| AgentMaurice (`agentmaurice`) | Workflow caller and protected workflow receiver | WIT + WPT and WIT + HTTP Message Signatures | — | Both directions exercised ordinary WIT. The tested grant refused a SPIFFE holder, and SPIRE WIT-SVID needs separate inbound and outbound bindings. |
+
+### Credential acquisition, delegation, token exchange, and policy checks
+
+An execution can pass when it refuses a request at an expected earlier hop. Use the per-ID evidence to see whether the execution reached the peer assigned to a later role. [Credential acquisition and issuance](pkgs/tba-tests-interop-wimse/matrix/wimse-interop-peers.md#credential-acquisition-and-issuance) · [Delegation and token exchange](pkgs/tba-tests-interop-wimse/matrix/wimse-interop-peers.md#delegation-and-token-exchange) · [Status and policy checks](pkgs/tba-tests-interop-wimse/matrix/wimse-interop-peers.md#status-and-policy-checks) · [Runtime configuration](pkgs/tba-tests-interop-wimse/matrix/wimse-external-peer-access.md)
+
+| Implementation | Hop or credential role | Capability exercised or targeted |
+| --- | --- | --- |
+| go-spiffe (`go-spiffe`) | Credential requester | Fetches an X.509-SVID and trust bundle from SPIRE Agent. |
+| Teleport tbot (`teleport-tbot`) | Credential delivery | Delivers an X.509-SVID and bundle. The next mTLS receiver verifies the delivered certificate in acquisition cases that continue. |
+| SPIRE Server and Agent | Credential issuer and delivery service | Server supplies lab X.509-SVID and WIT-SVID issuer bindings. Agent delivers X.509-SVIDs through the Workload API. |
+| TbA (`tba`) | Credential issuer and delivery service | Native fixtures issue X.509-SVIDs and WIT-SVIDs. The Workload API delivers X.509-SVIDs and a trust bundle. |
+| TbA (`tba`) | Delegation authority and token issuer | Lab fixtures bind delegated authority, issue transaction tokens, and handle source and destination token exchanges. TbA also provides a bearer-protected resource. |
+| authgent (`authgent`) | Transaction-token issuer | Exercises issuance scope and request binding with TbA and Cred. Lab services handle the subsequent source and destination exchanges. |
+| TbA (`tba`) | Status authority, before-effect enforcer, receipt verifier, and approval verifier | Lab fixtures exercise status and delegation enforcement, receipt verification, and approval checks. |
+| MintID (`mintid`) | Status authority | Exercises active proofs, issuer revocation, holder self-revocation, and witness refresh before a protected effect. |
+| EMILIA (`emilia`) | Before-effect enforcer | Exercises entry for an active issuer and blocks the protected callback after revocation. |
+| OmniArx (`omniarx`) | Approval verifier | Targets signed approval bound to the observed request and action. Cases that reach the verifier need a runnable binding. |
+| Redthread Security (`redthread`) | Delegation receipt verifier and before-effect enforcer | Targets delegation narrowing, receipt verification, and enforcement. Cases that reach the service need a runnable binding. |
+
+### RICH Coordinator and Research
+
+| Binding | Caller proof | Receiver proof | Qualified scope |
+| --- | --- | --- | --- |
+| RICH Coordinator | WIT + HTTP Message Signatures | WIT + HTTP Message Signatures | Generic control in both directions with TbA, plus the named Coordinator role |
+| RICH Research | WIT + WPT | WIT + HTTP Message Signatures | Calls TbA with WPT and receives TbA HTTP signatures in generic controls, plus the named Research role |
+
+The roles share one source revision and use distinct workload identities. The named nine-hop assignments and the generic RICH cases qualify separately.
+
 ## Arrows and hops
 
 A **hop** is one directed arrow between participants. The source initiates the interaction and the destination handles it. The [hop catalog](pkgs/tba-tests-interop-wimse/src/tba_tests_interop_wimse/hops.toml) defines five arrow types and the allowed operation transitions.
@@ -174,65 +254,6 @@ This table breaks down the 11,740 flows derived from the original workload scena
 
 To read a peer assignment, start with the ordered caller and receiver for each workload hop, then inspect their implementation, version, and configuration. The `wic_issuer` and `wit_issuer` choices are separate from the endpoint pair. For a gateway, check the ingress and enforcing assignments independently. Swapping caller and receiver changes which implementation presents the credential and which validates it, so the reverse direction needs its own control.
 
-## Entities, peers, roles, and capabilities
-
-A **participant** is a node in a flow, such as `workload-0`, a gateway, or an issuer. Its **entity type** tells you what it is. Its **role** tells you what it does on a particular hop. A **peer** is the concrete implementation bound to a participant. Two participants may use the same implementation, for example two independently configured TbA workloads.
-
-| Entity type | Example roles | Example bindings |
-|---|---|---|
-| Workload | Caller, receiver, delegator, delegate, token client, credential requester, policy client | TbA, wimsey, Cred, Cofide, go-spiffe, Defakto, AgentMaurice |
-| Delegation authority | Delegation authority | TbA delegation fixture |
-| Token service | Token issuer, transaction-token issuer | TbA token fixture, authgent |
-| Credential delivery service | Credential delivery | SPIRE Workload API, Teleport tbot, TbA Workload API |
-| Status and policy service | Status authority, before-effect enforcer, receipt verifier, approval verifier | TbA policy fixtures, MintID, EMILIA, Redthread, OmniArx |
-
-The matrix uses one [peer catalog](pkgs/tba-tests-interop-wimse/src/tba_tests_interop_wimse/peers.toml) for TbA and external implementations. The tables below group capabilities by hop role. An implementation can appear in more than one group when it fills multiple roles. For example, go-spiffe acts as a workload caller, a workload receiver, and a credential requester.
-
-A workload-call capability specifies the role, authentication profile, WIC identifier scheme, version, and configuration. A directional baseline records the exact caller and receiver tested together. Other hops have role-specific bindings and runtime evidence.
-
-### Workload calls
-
-Seven implementations fill workload-call roles. Two additional catalog slots for combined authentication resolve to wimsey in the lab. The WIC identifiers below apply to the TLS certificate. WIT supplies the application credential, and WPT or HTTP Message Signatures supply its proof. [Pinned sources and directional controls](pkgs/tba-tests-interop-wimse/matrix/wimse-interop-peers.md#workload-calls)
-
-| Peer or slot | Workload roles | Authentication profiles | WIC identifiers | Runtime scope |
-| --- | --- | --- | --- | --- |
-| TbA (`tba`) | Caller and receiver | WIC/mTLS, WIT + WPT, WIT + HTTP Message Signatures, and WIC/mTLS combined with either proof | WIMSE and SPIFFE where WIC is used | Includes TbA-to-TbA and multi-hop cases, plus native X.509-SVID and WIT-SVID controls. |
-| wimsey (`wimsey`) | Caller and receiver | WIC/mTLS | WIMSE and SPIFFE | The shared TLS lab exercises the wimsey WIC verifier in both directions against TbA. |
-| Cred (`cred`) | Caller and receiver | WIT + WPT and WIT + HTTP Message Signatures | — | The WPT lab covers SPIRE-issued WIT-SVID. The signature lab covers direct requests and transaction binding with a lab-issued WIT. |
-| Cofide WIMSE PoC (`cofide`) | Caller and receiver | WIT + HTTP Message Signatures | — | A bridge adapts the PoC signing profile for the tested TbA pairings. |
-| Combined WPT slot (`combined-wpt-candidate`) | Caller and receiver | WIC/mTLS + WIT/WPT | WIMSE and SPIFFE | Composes the wimsey WIC verifier and WPT bridge in the shared HTTPS lab. |
-| Combined signature slot (`combined-signature-candidate`) | Caller and receiver | WIC/mTLS + WIT/HTTP Message Signatures | WIMSE and SPIFFE | Composes the wimsey WIC and HTTP signature components in the shared HTTPS lab. |
-| go-spiffe (`go-spiffe`) | Caller and receiver in the shared mTLS fixture | WIC/mTLS | SPIFFE | Exercises direct-CA and SPIRE credentials in both directions. |
-| Defakto (`defakto`) | Caller and receiver in the shared mTLS fixture | WIC/mTLS | SPIFFE | Both directions exercise the SDK verifier with direct-CA and SPIRE-issued credentials. |
-| AgentMaurice (`agentmaurice`) | Workflow caller and protected workflow receiver | WIT + WPT and WIT + HTTP Message Signatures | — | Both directions exercised ordinary WIT. The tested grant refused a SPIFFE holder, and SPIRE WIT-SVID needs separate inbound and outbound bindings. |
-
-### Credential acquisition, delegation, token exchange, and policy checks
-
-An execution can pass when it refuses a request at an expected earlier hop. Use the per-ID evidence to see whether the execution reached the peer assigned to a later role. [Credential acquisition and issuance](pkgs/tba-tests-interop-wimse/matrix/wimse-interop-peers.md#credential-acquisition-and-issuance) · [Delegation and token exchange](pkgs/tba-tests-interop-wimse/matrix/wimse-interop-peers.md#delegation-and-token-exchange) · [Status and policy checks](pkgs/tba-tests-interop-wimse/matrix/wimse-interop-peers.md#status-and-policy-checks) · [Runtime configuration](pkgs/tba-tests-interop-wimse/matrix/wimse-external-peer-access.md)
-
-| Implementation | Hop or credential role | Capability exercised or targeted |
-| --- | --- | --- |
-| go-spiffe (`go-spiffe`) | Credential requester | Fetches an X.509-SVID and trust bundle from SPIRE Agent. |
-| Teleport tbot (`teleport-tbot`) | Credential delivery | Delivers an X.509-SVID and bundle. The next mTLS receiver verifies the delivered certificate in acquisition cases that continue. |
-| SPIRE Server and Agent | Credential issuer and delivery service | Server supplies lab X.509-SVID and WIT-SVID issuer bindings. Agent delivers X.509-SVIDs through the Workload API. |
-| TbA (`tba`) | Credential issuer and delivery service | Native fixtures issue X.509-SVIDs and WIT-SVIDs. The Workload API delivers X.509-SVIDs and a trust bundle. |
-| TbA (`tba`) | Delegation authority and token issuer | Lab fixtures bind delegated authority, issue transaction tokens, and handle source and destination token exchanges. TbA also provides a bearer-protected resource. |
-| authgent (`authgent`) | Transaction-token issuer | Exercises issuance scope and request binding with TbA and Cred. Lab services handle the subsequent source and destination exchanges. |
-| TbA (`tba`) | Status authority, before-effect enforcer, receipt verifier, and approval verifier | Lab fixtures exercise status and delegation enforcement, receipt verification, and approval checks. |
-| MintID (`mintid`) | Status authority | Exercises active proofs, issuer revocation, holder self-revocation, and witness refresh before a protected effect. |
-| EMILIA (`emilia`) | Before-effect enforcer | Exercises entry for an active issuer and blocks the protected callback after revocation. |
-| OmniArx (`omniarx`) | Approval verifier | Targets signed approval bound to the observed request and action. Cases that reach the verifier need a runnable binding. |
-| Redthread Security (`redthread`) | Delegation receipt verifier and before-effect enforcer | Targets delegation narrowing, receipt verification, and enforcement. Cases that reach the service need a runnable binding. |
-
-### RICH Coordinator and Research
-
-| Binding | Caller proof | Receiver proof | Qualified scope |
-| --- | --- | --- | --- |
-| RICH Coordinator | WIT + HTTP Message Signatures | WIT + HTTP Message Signatures | Generic control in both directions with TbA, plus the named Coordinator role |
-| RICH Research | WIT + WPT | WIT + HTTP Message Signatures | Calls TbA with WPT and receives TbA HTTP signatures in generic controls, plus the named Research role |
-
-The roles share one source revision and use distinct workload identities. The named nine-hop assignments and the generic RICH cases qualify separately.
-
 ## Nine-hop success case across two trust domains
 
 The named `ietf127-b-chain` flow models a two-domain request that ends in a protected file read. The Driver starts in Domain A. It gets the original transaction token in A and exchanges an audience-bound assertion at Exchange B. The original transaction token stays in A. The Coordinator and Research run in B with separate workload identities. [Pinned nine-hop reference and qualification](pkgs/tba-tests-interop-wimse/matrix/wimse-interop-rich-nine-hop-qualification.md)
@@ -313,29 +334,22 @@ The [README results table](README.md#hosted-results) records run 44021013592, at
 
 All 182 failures were in the original matrix. Its 8,402 blockers were AgentMaurice bindings or signing controls (7,838), Redthread (284), and OmniArx (280). The two generic RICH groups had 1,717 blockers, including 880 cases with AgentMaurice companion endpoints or directions and 792 cases requiring source/destination token, accounting/resource, or status/effect fixtures. The report records the remaining support and adapter reasons per ID.
 
+### Hosted outcomes by hop count
+
+Counts are execution IDs. Each ID represents a scenario and an applicable peer assignment. The table joins the 161,370-ID frozen manifest to the per-ID outcomes from run 44021013592, attempt 2. A case is grouped by its planned hop count, even if an expected refusal ends the observed trace earlier.
+
+| Planned hops | Execution IDs | Passed | Failed | Blocked |
+| ---: | ---: | ---: | ---: | ---: |
+| 1 | 2,195 | 2,012 | 4 | 179 |
+| 2 | 12,602 | 10,258 | 178 | 2,166 |
+| 3 | 134,285 | 126,511 | 0 | 7,774 |
+| 9 | 12,288 | 12,288 | 0 | 0 |
+| **Total** | **161,370** | **151,069** | **182** | **10,119** |
+
+The one-, two-, and three-hop rows include both the original and applicable generic RICH executions. The nine-hop row covers the named two-domain success case. The four supplemental trust-domain controls ran separately. [Nine-hop diagram and substitutions](#nine-hop-success-case-across-two-trust-domains) · [Supplemental trust-domain controls](#verified-trust-domain-coverage)
+
 The original-matrix workflow can also publish its audited aggregate to the
 `interop-evidence` branch. Dispatch from `master` with `commit_evidence`
 enabled. Shards upload their own evidence and the report job writes once
 after aggregation under `runs/<run-id>/attempt-<attempt>/`. The full-matrix
 workflow uploads its combined report as a workflow artifact.
-
-## Peers and evidence
-
-The [peer catalog](pkgs/tba-tests-interop-wimse/src/tba_tests_interop_wimse/peers.toml) lists candidate roles and profiles. The hosted qualification artifacts record the exact implementation, pin, configuration, direction, and evidence. Use the [nine-hop substitution table](pkgs/tba-tests-interop-wimse/matrix/wimse-interop-rich-nine-hop-qualification.md#role-substitutions) for the role choices and the manifest's `named_scenarios.ietf127-b-chain.role_candidates` for their exact pins.
-
-| Peer or fixture | Runtime scope in the hosted suite |
-| --- | --- |
-| TbA | Native baseline cases, generic RICH companion endpoints, and all nine named role choices |
-| RICH Coordinator | WIT with HTTP Message Signatures in both directions with TbA for generic cases. Coordinator in the named chain |
-| RICH Research | Receives TbA HTTP Message Signatures with a WIT and calls TbA with WIT/WPT for generic cases. Research in the named chain |
-| Cofide | Pinned Go signature bridge. Driver, Ingress, and Coordinator in the named chain using the signed-audience compatibility overlay |
-| Cred | Pinned WIT/WPT and HTTP-signature adapters. Driver, Ingress, Coordinator, Research, and File Tool in the named chain |
-| AgentMaurice | Named Ingress and File Tool receivers. Generic coverage is limited by the selected SPIRE WIT-SVID/proof-key and outbound transaction-signature bindings |
-| IETF 127 demo | Reference Driver, Domain A and B token services, and File Tool |
-| wimsey, Defakto, go-spiffe | Pinned proof or mutual-TLS components in the shared HTTPS lab as configured by profile |
-| Teleport tbot | Hosted Workload API X.509-SVID delivery and mTLS handoff |
-| MintID, EMILIA | Hosted status and before-effect controls within the configured fixtures |
-| Authgent | Pinned transaction-token cases in the original matrix. Named nine-hop issuer requirements are tracked separately |
-| Redthread, OmniArx | Blocked rows remain in the inventory pending runnable bindings for the reported verifier and support operations |
-
-[Generic RICH qualification](https://github.com/tigrbl/tba-tests-interop-wimse/actions/runs/44021013592/artifacts/14304893080) records the four live directional controls. The named nine-hop report's `qualification.json` maps each role binding and each directional handoff to a passing execution ID. The named and generic scopes have different fixture contracts and pins.

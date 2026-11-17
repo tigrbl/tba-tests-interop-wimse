@@ -22,7 +22,19 @@ The core catalog defines **20 scenario families**. Factoring their variants by t
 
 Each execution binds the ordered hops to compatible peers and support services. A capability applies to a particular role, such as a caller presenting WIT with WPT, a receiver validating it, or an issuer supplying credentials. A binding also records the implementation version and configuration. Substituting a peer or reversing a call changes the binding and can produce a separate execution ID. The inventory enumerates every assignment admitted by the published scenario rules and peer pins. The runtime report shows which assignments actually ran. [Scenario model and peer assignments](INTEROP.md#from-a-use-case-to-an-execution-id)
 
-## Execution suites and hosted results
+## Peers covered by the matrix
+
+| Role in the matrix | Peers and fixtures |
+| --- | --- |
+| Workload callers and receivers | TbA, wimsey, Cred, Cofide, go-spiffe, Defakto, AgentMaurice, RICH Coordinator, and RICH Research |
+| Credential issuance and delivery | TbA, SPIRE, and Teleport tbot. The go-spiffe client also exercises credential acquisition. |
+| Transaction tokens, status, and policy | TbA support fixtures, Authgent, MintID, and EMILIA |
+| Named nine-hop reference roles | IETF 127 demo fixtures for the Driver, token services, and File Tool |
+| Blocked external bindings | Redthread and OmniArx cases that require a runnable verifier or support operation |
+
+Runtime evidence applies to the role, direction, and proof mode exercised with the pinned configuration. A passing result can be an expected refusal before a downstream role runs. See [peer roles, capabilities, and evidence](INTEROP.md#entities-peers-roles-and-capabilities) for the scope of each binding.
+
+## Hosted results
 
 [Run 44021013592, attempt 2](https://github.com/tigrbl/tba-tests-interop-wimse/actions/runs/44021013592/attempts/2) reconciled every ID on GitHub-hosted Ubuntu. **151,251 cases executed to a verdict**.
 
@@ -33,6 +45,8 @@ Each execution binds the ordered hops to compatible peers and support services. 
 | Generic RICH typed hops | 5,102 | 4,398 | 0 | 704 |
 | IETF 127 nine-hop success | 12,288 | 12,288 | 0 | 0 |
 | **Full matrix** | **161,370** | **151,069** | **182** | **10,119** |
+
+[Results by planned hop count](INTEROP.md#hosted-outcomes-by-hop-count) show the one-, two-, three-, and nine-hop totals.
 
 A pass means the observed result matched the expected outcome, which can include a refusal. A failure means execution produced a different result. A blocked case could not reach a verdict.
 
