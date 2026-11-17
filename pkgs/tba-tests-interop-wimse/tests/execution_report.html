@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>WIMSE execution results</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --line: light-dark(#d0d7de, #3d444d);
+      --muted: light-dark(#57606a, #a4adb8);
+      --surface: light-dark(#f6f8fa, #1b2028);
+      --accent: light-dark(#0969da, #79b8ff);
+    }
+    body { max-width: 86rem; padding: 1.5rem; margin: auto; font: 1rem/1.5 "Inter", system-ui, sans-serif; }
+    h1, h2 { line-height: 1.25; margin: 0 0 .5rem; }
+    a { color: var(--accent); }
+    .muted { color: var(--muted); }
+    .counts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .75rem; margin: 1.5rem 0; }
+    .counts div { padding: .75rem 1rem; background: var(--surface); border: 1px solid var(--line); border-radius: .5rem; }
+    dt { font-weight: 600; }
+    dd { margin: 0; overflow-wrap: anywhere; }
+    .counts dd { font-size: 1.5rem; font-weight: 650; font-variant-numeric: tabular-nums; }
+    fieldset { display: flex; flex-wrap: wrap; align-items: end; gap: .75rem; padding: 0; border: 0; margin: 0; }
+    label { display: grid; gap: .2rem; font-weight: 600; }
+    label:first-child { flex: 1 1 18rem; }
+    input, select, button { font: inherit; color: inherit; padding: .35rem .55rem; border: 1px solid var(--line); border-radius: .35rem; }
+    input, select { background: Canvas; }
+    button { cursor: pointer; background: var(--surface); }
+    button:disabled { cursor: default; opacity: .65; }
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; }
+    td, th { text-align: left; vertical-align: top; padding: .5rem .75rem; border-bottom: 1px solid var(--line); }
+    th { background: var(--surface); }
+    td:first-child { max-width: 22rem; }
+    td:nth-child(6) { min-width: 10rem; }
+    .case { max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--accent); }
+    .pass { color: light-dark(#116329, #7ee787); }
+    .fail { color: light-dark(#a40e26, #ff938c); }
+    .blocked { color: light-dark(#754c00, #f2cc60); }
+    .outcome { font-weight: 650; }
+    nav { display: flex; gap: .75rem; align-items: center; justify-content: end; margin: 1rem 0; }
+    dialog { width: min(48rem, 85vw); max-height: 82vh; border: 1px solid var(--line); border-radius: .6rem; padding: 1.25rem; }
+    dialog::backdrop { background: #0008; }
+    dialog header { display: flex; justify-content: space-between; align-items: start; gap: 1rem; }
+    dialog dl { display: grid; grid-template-columns: 9rem 1fr; gap: .5rem 1rem; }
+    dialog li { margin-bottom: .5rem; overflow-wrap: anywhere; }
+    code { overflow-wrap: anywhere; }
+    @media (max-width: 35rem) { .counts { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>WIMSE execution results</h1>
+    <div id="source" class="muted"></div>
+    <dl class="counts">
+      <div><dt>Executions</dt><dd id="total">—</dd></div>
+      <div><dt>Passed</dt><dd class="pass" id="pass">—</dd></div>
+      <div><dt>Failed</dt><dd class="fail" id="fail">—</dd></div>
+      <div><dt>Blocked</dt><dd class="blocked" id="blocked">—</dd></div>
+    </dl>
+    <form id="filters">
+      <fieldset id="controls" disabled>
+        <label>Search results<input id="query" type="search" placeholder="Execution ID, scenario, or reason"></label>
+        <label>Outcome<select id="status"><option value="">All outcomes</option></select></label>
+        <label>Suite<select id="lane"><option value="">All suites</option></select></label>
+        <label>Planned hops<select id="hop_count"><option value="">Any length</option></select></label>
+        <label>Planned peer<select id="peer"><option value="">All peers</option></select></label>
+        <button type="reset">Clear filters</button>
+      </fieldset>
+    </form>
+    <p id="matches" role="status">Loading execution results…</p>
+    <noscript>This report requires JavaScript. Use per-id.csv.gz for the same audited outcomes.</noscript>
+    <div class="table-wrap">
+      <table aria-label="Execution results">
+        <thead><tr><th scope="col">Execution ID</th><th scope="col">Outcome</th><th scope="col">Suite</th><th scope="col">Hops</th><th scope="col">Planned peers</th><th scope="col">Reason</th></tr></thead>
+        <tbody id="results"></tbody>
+      </table>
+    </div>
+    <nav aria-label="Result pages">
+      <button id="previous" disabled>Previous</button>
+      <span id="page"></span>
+      <button id="next" disabled>Next</button>
+    </nav>
+    <details id="provenance" hidden>
+      <summary>Manifest SHA-256</summary>
+      <code id="digest"></code>
+    </details>
+  </main>
+  <dialog id="detail" aria-labelledby="detail-title">
+    <header><h2 id="detail-title">Execution details</h2><form method="dialog"><button>Close</button></form></header>
+    <dl id="fields"></dl>
+    <h3>Planned hops</h3>
+    <ol id="steps"></ol>
+  </dialog>
+  <script id="report-data" type="application/octet-stream"><!-- REPORT_DATA --></script>
+  <script>
+    const byId = id => document.getElementById(id);
+    const labels = {
+      pass: "Passed", fail: "Failed", blocked: "Blocked",
+      baseline: "Original matrix", "rich-workload": "RICH workload",
+      "rich-typed": "RICH typed hops", "nine-hop": "Nine-hop"
+    };
+    const number = value => value.toLocaleString("en-US");
+    const pageSize = 50;
+    let rows = [];
+    let matches = [];
+    let pageNumber = 0;
+
+    function element(tag, text) {
+      const node = document.createElement(tag);
+      node.textContent = text;
+      return node;
+    }
+
+    function addOptions(id, values) {
+      for (const value of values) {
+        byId(id).add(new Option(labels[value] ?? value, value));
+      }
+    }
+
+    function inspect(row) {
+      const fields = [
+        ["Execution ID", row.execution_id], ["Outcome", labels[row.status]],
+        ["Suite", labels[row.lane]], ["Scenario or variant", row.scenario],
+        ["Hop sequence", row.hop_sequence_id], ["Expected result", row.expected],
+        ["Expected effects", row.expected_effects], ["Observed reason", row.reason],
+        ["Source status", row.source_status], ["Runtime ID", row.runtime_id],
+        ["Shard", row.shard], ["Evidence", row.evidence]
+      ];
+      byId("fields").replaceChildren(...fields.flatMap(([label, value]) =>
+        value === null || value === undefined || value === "" ? [] : [element("dt", label), element("dd", value)]
+      ));
+      byId("steps").replaceChildren(...row.hops.map(hop => {
+        const item = element("li", hop.operation + ": " + hop.caller + " → " + hop.receiver);
+        for (const side of ["caller", "receiver"]) {
+          const pin = hop[side + "_pin"];
+          if (pin) item.append(element("div", side + ": " + pin.filter(Boolean).join(" · ")));
+        }
+        const settings = [
+          hop.profile, hop.identifier_scheme,
+          hop.wic_issuer && "WIC issuer: " + hop.wic_issuer,
+          hop.wit_issuer && "WIT issuer: " + hop.wit_issuer,
+          hop.support && "Support role: " + hop.support
+        ].filter(Boolean);
+        if (settings.length) item.append(element("div", settings.join(" · ")));
+        return item;
+      }));
+      byId("detail").showModal();
+    }
+
+    function displayPage() {
+      const start = pageNumber * pageSize;
+      const last = Math.min(start + pageSize, matches.length);
+      const fragment = document.createDocumentFragment();
+      for (const row of matches.slice(start, last)) {
+        const tr = document.createElement("tr");
+        const id = document.createElement("td");
+        const button = element("button", row.execution_id);
+        button.type = "button";
+        button.title = row.execution_id;
+        button.className = "case";
+        button.addEventListener("click", () => inspect(row));
+        id.append(button);
+        const status = element("td", labels[row.status]);
+        status.className = "outcome " + row.status;
+        tr.append(id, status, element("td", labels[row.lane]), element("td", row.hop_count),
+                  element("td", row.peers.join(", ")), element("td", row.reason || "—"));
+        fragment.append(tr);
+      }
+      byId("results").replaceChildren(fragment);
+      byId("matches").textContent = matches.length
+        ? number(start + 1) + "–" + number(last) + " of " + number(matches.length) + " matching executions"
+        : "No matching executions";
+      byId("page").textContent = matches.length
+        ? "Page " + number(pageNumber + 1) + " of " + number(Math.ceil(matches.length / pageSize))
+        : "";
+      byId("previous").disabled = pageNumber === 0;
+      byId("next").disabled = last >= matches.length;
+    }
+
+    function applyFilters() {
+      const query = byId("query").value.trim().toLowerCase();
+      const status = byId("status").value;
+      const lane = byId("lane").value;
+      const hops = byId("hop_count").value;
+      const peer = byId("peer").value;
+      matches = rows.filter(row =>
+        (!status || row.status === status) &&
+        (!lane || row.lane === lane) &&
+        (!hops || row.hop_count === Number(hops)) &&
+        (!peer || row.peers.includes(peer)) &&
+        (!query || [row.execution_id, row.runtime_id, row.scenario, row.reason, row.hop_sequence_id]
+          .some(value => value?.toLowerCase().includes(query)))
+      );
+      pageNumber = 0;
+      displayPage();
+    }
+
+    async function loadReport() {
+      const data = byId("report-data");
+      const bytes = Uint8Array.from(atob(data.textContent.trim()), character => character.charCodeAt(0));
+      data.remove();
+      const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream("gzip"));
+      const report = await new Response(stream).json();
+      rows = report.rows;
+      byId("total").textContent = number(rows.length);
+      for (const status of ["pass", "fail", "blocked"]) {
+        byId(status).textContent = number(report.counts[status]);
+      }
+      if (report.run_url.startsWith("https://github.com/")) {
+        const link = element("a", "GitHub Actions run and evidence");
+        link.href = report.run_url;
+        byId("source").append(link);
+      }
+      byId("digest").textContent = report.manifest_sha256;
+      byId("provenance").hidden = false;
+      addOptions("status", ["pass", "fail", "blocked"]);
+      addOptions("lane", new Set(rows.map(row => row.lane)));
+      addOptions("hop_count", [...new Set(rows.map(row => row.hop_count))].sort((a, b) => a - b));
+      const peers = new Set();
+      for (const row of rows) for (const peer of row.peers) peers.add(peer);
+      addOptions("peer", [...peers].sort());
+
+      byId("controls").disabled = false;
+      byId("filters").addEventListener("submit", event => event.preventDefault());
+      byId("filters").addEventListener("change", applyFilters);
+      byId("filters").addEventListener("reset", () => setTimeout(applyFilters, 0));
+      let searchTimer;
+      byId("query").addEventListener("input", () => {
+        clearTimeout(searchTimer);
+        searchTimer = setTimeout(applyFilters, 150);
+      });
+      byId("previous").addEventListener("click", () => { pageNumber -= 1; displayPage(); });
+      byId("next").addEventListener("click", () => { pageNumber += 1; displayPage(); });
+      applyFilters();
+    }
+
+    loadReport().catch(error => {
+      byId("matches").textContent = "Could not open the interactive report. Use per-id.csv.gz for the audited results.";
+      console.error(error);
+    });
+  </script>
+</body>
+</html>

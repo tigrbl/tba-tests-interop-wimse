@@ -18,6 +18,7 @@
   - [Nine-hop role substitutions](#nine-hop-role-substitutions)
 - [Select a run](#select-a-run)
 - [Read the results](#read-the-results)
+  - [Review individual executions](#review-individual-executions)
 
 ## Hops, trust domains, and execution IDs
 
@@ -356,6 +357,18 @@ The [README results table](README.md#hosted-results) records run 44021013592, at
 - **Blocked** means execution could not reach a verdict. Inspect the per-ID reason for missing endpoints, handoffs, issuers, or other support roles. Setup failures and cases without results also count as blocked and are flagged as infrastructure outcomes. Attempt 2 had zero infrastructure outcomes.
 
 All 182 failures were in the original matrix. Its 8,402 blockers were AgentMaurice bindings or signing controls (7,838), Redthread (284), and OmniArx (280). The two generic RICH groups had 1,717 blockers, including 880 cases with AgentMaurice companion endpoints or directions and 792 cases requiring source/destination token, accounting/resource, or status/effect fixtures. The report records the remaining support and adapter reasons per ID.
+
+### Review individual executions
+
+Download and extract `full-wimse-matrix-results`, then open `results.html` in a current browser. The viewer includes every audited ID. Filter by status, suite, planned hop count, or planned peer. Search by published or runtime ID, scenario, hop sequence, or reason. Select a row's ID to see the exact result metadata, planned roles and pins, and evidence path when supplied. The peer and hop filters describe the planned assignment. A refusal or blocker can stop execution before a later planned peer is reached.
+
+The original CSV and summary remain available in the artifact. For an earlier artifact that has `per-id.csv.gz` and `summary.json` but lacks the viewer, regenerate it from the repository root using the matching frozen manifest.
+
+```sh
+python pkgs/tba-tests-interop-wimse/tests/render_execution_report.py \
+  --manifest pkgs/tba-tests-interop-wimse/matrix/wimse-interop-rich-nine-hop-executions.json.gz \
+  --report path/to/full-wimse-matrix-results
+```
 
 The original-matrix workflow can also publish its audited aggregate to the
 `interop-evidence` branch. Dispatch from `master` with `commit_evidence`

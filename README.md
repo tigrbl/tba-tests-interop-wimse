@@ -93,6 +93,8 @@ Open [Full WIMSE interoperability matrix](https://github.com/tigrbl/tba-tests-in
 
 ## Results and evidence
 
+Download the `full-wimse-matrix-results` artifact, extract it, and open `results.html` in a browser. Search by execution ID, scenario, or reason. Filter by outcome, suite, planned hop count, or planned peer. Select an ID to inspect its evidence fields and planned hop bindings. The report works offline. For an older artifact, [generate the browser report locally](INTEROP.md#review-individual-executions).
+
 For the full run, open `full-wimse-matrix-results` and find the published `execution_id` in `per-id.csv.gz`. Use the corresponding manifest row for the planned peer assignment and expected outcome. The report records the result and reason. Use `summary.json` to check the inventory digest and the aggregate counts. [Hosted results artifact](https://github.com/tigrbl/tba-tests-interop-wimse/actions/runs/44021013592/artifacts/14305462171) · [Report fields](INTEROP.md#read-the-results)
 
 ## Original 142,844-ID inventory
