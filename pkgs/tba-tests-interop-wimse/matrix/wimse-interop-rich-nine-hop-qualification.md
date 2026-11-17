@@ -40,3 +40,21 @@ The 94 pairs are a local qualification inventory. The end-to-end run still needs
 ## Hosted execution
 
 Dispatch `nine-hop.yml` with the desired shard count. Each shard launches an isolated lab, executes its assignments, and checks its private HTTP capture. The report reconciles the shards against the named inventory. It links each qualified role and directional pair to a passing execution ID. Only result metadata is uploaded. A failure means the execution ran and did not meet the success checks. A blocked result records a missing runtime binding or unavailable evidence.
+
+## Authgent issuer candidates
+
+Run `tests/qualify_authgent_nine_hop.py` against the installed server from the
+clean pinned Authgent checkout. The probe uses disposable local issuers and
+reports signed claim checks and HTTP outcomes without recording credentials.
+At revision `8341cf932c9816dc666f2a6577b6776bd6f3b978`, the source and
+destination issuance controls returned verified transaction JWTs with a
+registered OAuth client identifier in `req_wl`. The replacement control sent
+the issued Domain B token back as a transaction-token subject and received
+HTTP 400 `invalid_request`.
+
+Qualify a future issuer revision at hop 1 using the authenticated WIT subject
+as the requesting workload. For hops 6 and 8, qualify one issuer instance
+with the real Domain B access token, then verify that replacement from
+`T_B1` preserves the transaction ID, narrows scope and binds the Research
+identity. Keep these candidate roles outside the published inventory until
+the live issuer passes those controls.

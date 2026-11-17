@@ -35,7 +35,7 @@ def fingerprint(token):
 
 
 @contextmanager
-def authgent_issuer(python, checkout, output):
+def authgent_issuer(python, checkout, output, *, audience=AUDIENCE):
     root = subprocess.check_output(["git", "-C", str(checkout), "rev-parse", "HEAD"], text=True).strip()
     dirty = subprocess.check_output(["git", "-C", str(checkout), "status", "--porcelain",
                                      "--untracked-files=no"], text=True)
@@ -51,7 +51,7 @@ def authgent_issuer(python, checkout, output):
     base = f"http://127.0.0.1:{port}"
     env = {key: value for key, value in os.environ.items()
            if not key.upper().startswith(("AUTHGENT_", "PYTHONPATH", "PYTHONHOME"))}
-    env.update(AUTHGENT_SERVER_URL=base, AUTHGENT_TXN_TOKEN_TRUST_DOMAIN=AUDIENCE,
+    env.update(AUTHGENT_SERVER_URL=base, AUTHGENT_TXN_TOKEN_TRUST_DOMAIN=audience,
                AUTHGENT_DATABASE_URL="sqlite+aiosqlite:///:memory:", AUTHGENT_REGISTRATION_POLICY="open",
                AUTHGENT_SECRET_KEY=token_urlsafe(64), PYTHONIOENCODING="utf-8")
     with (output / "issuer.log").open("w", encoding="utf-8") as log:
