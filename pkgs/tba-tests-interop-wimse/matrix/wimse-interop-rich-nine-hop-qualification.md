@@ -1,23 +1,21 @@
 # RICH and the IETF 127 nine-hop success case
 
-The [full manifest](wimse-interop-rich-nine-hop-executions.json.gz) preserves the original 142,844 IDs and adds 1,136 generic RICH workload cases, 5,102 generic RICH typed-hop cases, and 12,288 assignments for the named `ietf127-b-chain` success case. The [interop guide](../../../INTEROP.md) explains the full hosted results.
+`wimse-interop-rich-nine-hop-executions.json.gz` contains 161,370 unique candidate execution IDs. The existing 142,844 rows retain their IDs and contents. The expansion adds 1,136 RICH workload cases, 5,102 RICH typed flows, and 12,288 assignments for one named nine-hop success case. The 3,072 assignments that keep each domain's issuer and exchange on the same implementation are included in the 12,288.
 
-The [pinned IETF 127 B_CHAIN reference](https://github.com/apelov/IETF127-Hackathon-AI2II-WIMSE/blob/49d29ca31d248af4a169176969e712c673f11ef9/validation/opus-chain-review.md) models a request originating in Domain A that obtains authority to read a protected file in Domain B.
+From the package directory, generate a new copy at an unused output path.
 
-| Hop | Caller → receiver | Handoff and check | Qualified directions |
-| --- | --- | --- | ---: |
-| 1 | Driver → Issuer A | Issue `T_A` bound to the Driver identity, ingress audience, scope, and file context | 8 |
-| 2 | Driver → Ingress | Verify the WIT, HTTP signature, and `T_A`, then run the text-stats operation | 16 |
-| 3 | Driver → Exchange A | Verify the signed request and `T_A`, then issue an assertion for Exchange B | 8 |
-| 4 | Driver → Exchange B | Redeem the assertion for an access token scoped to Domain B | 8 |
-| 5 | Driver → Coordinator | Verify the signed request and Domain B access token, then start the downstream calls | 16 |
-| 6 | Coordinator → Issuer B | Exchange the Domain B access token for `T_B1` bound to the Coordinator | 8 |
-| 7 | Coordinator → Research | Verify the signed call and the bound `T_B1` | 12 |
-| 8 | Research → Issuer B | Replace `T_B1` with `T_B2`, retaining the transaction ID and narrowing scope for Research | 6 |
-| 9 | Research → File Tool | Verify WPT binding to the WIT and `T_B2`, then authorize exactly one read of `Q3.pdf` | 12 |
-| **Total** | | | **94** |
+```sh
+python -m tba_tests_interop_wimse \
+  --extend-frozen-manifest matrix/wimse-interop-all-tba-executions.json.gz \
+  --output rich-nine-hop.json.gz
+python -m tba_tests_interop_wimse --frozen-manifest rich-nine-hop.json.gz
+```
 
-The success oracle checks the ordered HTTP results, ingress and research outputs, token continuity, narrowed scope, and the single protected effect. The original Domain A transaction token stays in Domain A.
+The expansion uses the original manifest's endpoint pins and falls back to the peer catalog for declared capabilities absent from it. The RICH coordinator and research configurations share the pinned revision and use distinct workload identities. The named flow models the pinned B_CHAIN success case separately from the generic one-to-three-hop vocabulary. Its input, output, role candidates and qualification contracts are in `named_scenarios.ietf127-b-chain` in the generated inventory.
+
+## Hosted qualification results
+
+[Hosted run 44021013592, attempt 2](https://github.com/tigrbl/tba-tests-interop-wimse/actions/runs/44021013592/attempts/2) recorded **12,288 passed, 0 failed, and 0 blocked** for the named success case. The `nine-hop-results` artifact includes `qualification.json`, which maps all **27 role bindings** and **94 directional handoffs** to passing execution IDs. The runner checks the HTTP capture against the success oracle. Refusal controls have their own qualification evidence. See the [interop guide](../../../INTEROP.md) for the full run.
 
 ## Role substitutions
 
@@ -39,18 +37,35 @@ The product of the choice counts is **12,288 assignments**, including **3,072** 
 
 The pinned AgentMaurice workflow caller reserves the supplied `Txn-Token` header. Its qualified substitutions are Ingress and File Tool receivers. Authgent's issuer constraints are below. Cofide's [signature bridge](../tests/support/nine_hop_cofide.md) uses an overlay to sign `wimse-aud`. The [TbA File Tool WPT fixture](../tests/support/nine_hop_tba.md) opts in to preserving the exact empty-path audience.
 
-## Hosted execution and evidence
+The following qualification plan records the requirements and status before the full hosted run.
 
-[Hosted run 44021013592, attempt 2](https://github.com/tigrbl/tba-tests-interop-wimse/actions/runs/44021013592/attempts/2) reported **12,288 passed, 0 failed, and 0 blocked** for the named success case. Its `nine-hop-results/qualification.json` links all **27 role bindings** and **94 directional handoffs** to passing execution IDs. The runner compares each assignment's HTTP capture with the nine-hop checks and uploads result metadata and per-ID outcomes. Refusal controls have separate qualification evidence.
+## Qualification required
 
-Dispatch [WIMSE nine-hop interoperability](../../../.github/workflows/nine-hop.yml) to rerun these assignments on hosted Ubuntu. To regenerate the full inventory locally, run from the package directory at a fresh output path.
+The original AgentMaurice/RICH binding is documented in the [pinned hackathon wire review](https://github.com/apelov/IETF127-Hackathon-AI2II-WIMSE/blob/49d29ca31d248af4a169176969e712c673f11ef9/validation/opus-chain-review.md). The generated rows are planned candidates. The existing hosted matrix continues to use the original manifest for its qualified regression scope.
 
-```sh
-python -m tba_tests_interop_wimse \
-  --extend-frozen-manifest matrix/wimse-interop-all-tba-executions.json.gz \
-  --output rich-nine-hop.json.gz
-python -m tba_tests_interop_wimse --frozen-manifest rich-nine-hop.json.gz
-```
+| Hop | Contract to qualify | Directional binding pairs |
+| --- | --- | ---: |
+| 1 | Driver obtains T_A. The issuer binds the driver's WIMSE identity, ingress audience, scope, and file context. | 8 |
+| 2 | Ingress validates the signed request and T_A, authorizes the workload, and completes the text-stats workflow. | 16 |
+| 3 | Domain A exchange verifies the signed request and T_A, then issues an audience-bound cross-domain assertion. | 8 |
+| 4 | Domain B exchange validates the assertion and issues an access token for the Coordinator and Research. | 8 |
+| 5 | Coordinator verifies the signed request with its Domain B access token and drives the downstream calls. | 16 |
+| 6 | Domain B issuer accepts the access token and issues T_B1 for the Coordinator. | 8 |
+| 7 | Research verifies the Coordinator's signed call and the T_B1 bound to it. | 12 |
+| 8 | The same Domain B issuer replaces T_B1 with T_B2, preserving the transaction ID and narrowing scope for Research. | 6 |
+| 9 | The File Tool verifies WPT binding to the WIT and T_B2, then authorizes exactly one protected read with the expected output. | 12 |
+| **Total** | **27 role bindings across nine logical roles** | **94** |
+
+1. **Bind the actual endpoints.** Give each role binding a launch command or callable, immutable version, trust configuration and verifier instrumentation. Parameterize the pinned demo's addresses, audiences and keys so the same driver can call a substituted workload. Keep the distinct identities of the Coordinator and Research even when both use one implementation. Exercise the two RICH endpoints with their exact HTTP-signature and WPT interfaces, then qualify the matching components and application adapters for substitute roles.
+2. **Qualify issuance and exchange.** For TbA candidates, wire a transaction issuer, the JWT assertion exchange, its redemption, and Domain B's replacement flow to the exact token types and claims in the named case. Check signed-body binding, issuer trust, audience, `req_wl`, transaction-ID continuity, and scope. Validate the one-to-many handoffs where T_A feeds both ingress and source exchange and where the Domain B access token feeds the Coordinator and issuer. Verify that Domain A's raw token stays in Domain A.
+3. **Qualify complete role behavior.** Exercise the actual ingress workflow, coordinator-to-research call, research-to-tool call and protected read. A proof component qualifies only the portion it performs. Establish the passing control for each applicable handoff and verify rejection of an incompatible trust anchor, wrong audience, mismatched proof key, wrong workload binding, scope widening, and replay. These are qualification controls for the success inventory.
+4. **Wire and audit hosted execution.** Add a runner for the named flow that can provision the separate or co-located token endpoints, execute each assignment on Ubuntu, and record nine ordered hops, token fingerprints or correlation values, and the protected-effect count. Preserve the existing published IDs in the combined report and reconcile one terminal result per ID. Mark an unmet runtime or qualification dependency as blocked. Compare the full trace with the original wire oracle, including both WPT token hashes at the File Tool and the absence of T_A in Domain B.
+
+The 94 pairs are a local qualification inventory. The end-to-end run still needs to verify cross-hop state for each of the 12,288 assignments. The pinned AgentMaurice caller's transaction-header refusal excludes it from roles that must send a workflow-supplied Txn-Token. Pinned Authgent emits a client identifier in `req_wl` and accepts ID or access tokens for issuance. The named flow requires the presenting WIMSE identity and, at hop 8, a prior transaction token. [AgentMaurice hosted evidence](https://github.com/tigrbl/tba-tests-interop-wimse/actions/runs/43834708146/artifacts/14213917621) · [Authgent token service](https://github.com/authgent/authgent/blob/8341cf932c9816dc666f2a6577b6776bd6f3b978/server/authgent_server/services/token_service.py)
+
+## Hosted execution
+
+Dispatch `nine-hop.yml` with the desired shard count. Each shard launches an isolated lab, executes its assignments, and checks its private HTTP capture. The report reconciles the shards against the named inventory. It links each qualified role and directional pair to a passing execution ID. Only result metadata is uploaded. A failure means the execution ran and did not meet the success checks. A blocked result records a missing runtime binding or unavailable evidence.
 
 ## Authgent issuer candidates
 
