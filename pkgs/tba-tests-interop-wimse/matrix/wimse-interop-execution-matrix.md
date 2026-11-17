@@ -29,6 +29,19 @@ An arrow points from the caller to the receiver of the protected request. Issuer
 
 Sources for candidate roles. [Hackathon proposal and implementation list](https://mailarchive.ietf.org/arch/msg/wimse/6ofJ6o3sK9H_XEPCQWn_7SVEza4), [Cred participant report](https://mailarchive.ietf.org/arch/msg/wimse/vC0V6-1i6HWHJMKp-KNHYTIaQr0), [workload credential draft implementation status](https://www.ietf.org/archive/id/draft-ietf-wimse-workload-creds-03.html#section-8).
 
+## Trust-domain executions
+
+These four supplemental executions use TbA loopback workload endpoints and SPIFFE X.509-SVIDs over WIC/mTLS. Each domain has its own signing CA. Each hop configures TLS and SPIFFE identity verification for the expected peer's domain and certificate on both sides. In the gateway cases, an authenticated incoming request triggers the next call. The resource records exactly one protected write after the final hop, and the gateways record zero writes. The standalone fixture is in repository commit `23cd5cf`. [Scope and rerun instructions](wimse-interop-guide.md#verified-trust-domain-coverage)
+
+| Execution ID | Domains | Ordered participant and trust-domain assignments | mTLS hops | Crossings |
+| --- | ---: | --- | ---: | ---: |
+| `trust-domain:1:same-domain-control` | 1 | Caller (`alpha.example`) → resource (`alpha.example`) | 1 | 0 |
+| `trust-domain:2:direct` | 2 | Caller (`alpha.example`) → resource (`bravo.example`) | 1 | 1 |
+| `trust-domain:3:gateway` | 3 | Caller (`alpha.example`) → gateway (`bravo.example`) → resource (`charlie.example`) | 2 | 2 |
+| `trust-domain:4:gateway-chain` | 4 | Caller (`alpha.example`) → gateway (`bravo.example`) → relay (`charlie.example`) → resource (`delta.example`) | 3 | 3 |
+
+All four passed in the local loopback run. These cases use explicitly provisioned bundles. SPIRE federation bundle discovery, external peer pairings, and cross-domain credential acquisition or status checks are outside this run's scope.
+
 ## Execution groups
 
 Expand every applicable scenario variant per pairing and direction. The scenario matrix determines the allowed profiles. Require the forward passing control before running failure cases for that direction. Preflight the reverse roles independently.

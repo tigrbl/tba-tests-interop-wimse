@@ -1,5 +1,13 @@
 # WIMSE interop guide
 
+## Hops, trust domains, and execution IDs
+
+A **hop** is a directed interaction from an initiating participant to the participant that handles it. The catalog models five types: workload call, delegation, token exchange, credential acquisition, and status or policy check. A gateway can receive one call and originate the next. A hop can stay in one trust domain or cross into another. The named nine-hop chain uses two trust domains. [Hop types and one-, two-, and three-hop diagrams](pkgs/tba-tests-interop-wimse/matrix/wimse-interop-guide.md#arrows-and-hops) · [Trust-domain layouts and supplemental cases](pkgs/tba-tests-interop-wimse/matrix/wimse-interop-guide.md#trust-domain-assignments-for-the-example-flows)
+
+A **structural scenario** selects a topology, scenario variant, and applicable authentication and issuer choices. An **execution** assigns pinned implementations and configurations to its roles and records the expected outcome. The direction, credential issuer, and proof mode can change the assignment. The published ID identifies the planned case. The runtime ID identifies the corresponding case in the qualified lab and is used to find its JUnit observation. [From use case to published ID](pkgs/tba-tests-interop-wimse/matrix/wimse-interop-guide.md#from-a-use-case-to-an-execution-id) · [Published examples](pkgs/tba-tests-interop-wimse/matrix/wimse-interop-guide.md#published-execution-examples)
+
+A **peer** is an implementation bound to a participant. Its capability is specific to a role and profile, such as receiving WIT/WPT or delivering an X.509-SVID. A directional control qualifies one pinned caller and receiver pairing. For the full lookup, see the [peer capability reference](pkgs/tba-tests-interop-wimse/matrix/wimse-interop-peers.md), [authentication and peer assignments](pkgs/tba-tests-interop-wimse/matrix/wimse-interop-guide.md#authentication-and-peer-assignments), and [named nine-hop substitutions](pkgs/tba-tests-interop-wimse/matrix/wimse-interop-rich-nine-hop-qualification.md#role-substitutions).
+
 ## Select a run
 
 | Scope | GitHub Actions workflow | Selection |
