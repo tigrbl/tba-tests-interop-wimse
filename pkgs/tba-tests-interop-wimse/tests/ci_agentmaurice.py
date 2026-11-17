@@ -205,7 +205,7 @@ def execute(args, directory, stack, rows):
         wimsey=bins / "wimsey", wpt=bins / "tba-wimsey-wpt-bridge", cofide=root / "cofide-bridge",
         cred=args.snapshot.with_suffix(".cred") / "cred_bridge.mjs",
         go_spiffe=root / "go-spiffe", defakto=root / "defakto/verify.mjs",
-        emilia=root / "emilia/check.mjs", mintid_container=None,
+        emilia=root / "emilia/check.mjs", mintid_container=args.mintid_container,
     )
     adapter = open_adapter(adapter_args, stack, directory, bridge_factory=PolicyBridge)
     with args.output.open("x", encoding="utf-8") as stream:
@@ -246,6 +246,7 @@ def main():
     parser.add_argument("--shard", type=int)
     parser.add_argument("--snapshot", type=Path)
     parser.add_argument("--qualification", type=Path)
+    parser.add_argument("--mintid-container")
     args = parser.parse_args()
     args.assets = args.assets.resolve()
     args.fixtures = Path(__file__).resolve().parent / "support"

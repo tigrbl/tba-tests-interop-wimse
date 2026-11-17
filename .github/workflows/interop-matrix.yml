@@ -326,6 +326,7 @@ jobs:
           fi
           python "$INTEROP_PACKAGE/tests/ci_agentmaurice.py" --assets .interop/agentmaurice \
             --plan .interop/plan --shard "$SHARD" --snapshot "$TBA_WIMSE_PEER_SNAPSHOT" \
+            --mintid-container "$TBA_WIMSE_MINTID_CONTAINER" \
             --qualification .interop/plan/agentmaurice.json --output shard-evidence/agentmaurice.jsonl \
             2>&1 | tee shard-evidence/agentmaurice.log || status=$?
           exit "$status"
