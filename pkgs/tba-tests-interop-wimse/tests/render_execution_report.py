@@ -10,6 +10,11 @@ from html import escape
 import json
 from pathlib import Path
 
+try:
+    import tomllib
+except ModuleNotFoundError:
+    import tomli as tomllib
+
 from ci_full_matrix import GROUPS, read_inventory
 
 
@@ -19,6 +24,16 @@ PAGES_HIT_BADGE = (
     'src="https://hits.sh/tigrbl.github.io/tba-tests-interop-wimse.svg?label=Results%20site%20hits">'
     '</a></p>'
 )
+
+
+def workload_hop_assignments(scenario_id):
+    # The frozen scenario ID carries settings that the endpoint records omit.
+    _, _, _, assignments = scenario_id.split(":", 3)
+    fields = ("profile", "identifier_scheme", "wic_issuer", "wit_issuer")
+    return {
+        name: dict(zip(fields, settings.split("/"), strict=True))
+        for name, settings in (assignment.split("=", 1) for assignment in assignments.split(","))
+    }
 
 
 def planned_hops(case):
@@ -38,6 +53,7 @@ def planned_hops(case):
                 "support": hop.get("support"),
             }
     else:
+        assignments = workload_hop_assignments(case["scenario_id"])
         for operation, pair in case["pairs"].items():
             caller, receiver = pair["caller"], pair["receiver"]
             yield {
@@ -46,10 +62,7 @@ def planned_hops(case):
                 "receiver": "receiver",
                 "caller_pin": [caller["implementation"], caller.get("version"), caller.get("configuration")],
                 "receiver_pin": [receiver["implementation"], receiver.get("version"), receiver.get("configuration")],
-                "profile": caller.get("profile"),
-                "identifier_scheme": caller.get("identifier_scheme"),
-                "wic_issuer": caller.get("wic_issuer"),
-                "wit_issuer": caller.get("wit_issuer"),
+                **assignments[operation],
             }
 
 
@@ -88,9 +101,12 @@ def render(manifest, report, run_url, site_dir=None):
     if cases or len(rows) != summary["total"] or counts != Counter(summary["counts"]):
         raise ValueError("The per-ID results do not reconcile with the manifest and report summary")
 
+    catalog = Path(__file__).resolve().parents[1] / "src" / "tba_tests_interop_wimse" / "factors.toml"
+    with catalog.open("rb") as stream:
+        profiles = tomllib.load(stream)["hop_profiles"]
     data = json.dumps(
         {"rows": rows, "counts": summary["counts"], "run_url": run_url,
-         "manifest_sha256": summary["manifest_sha256"]},
+         "manifest_sha256": summary["manifest_sha256"], "profiles": profiles},
         ensure_ascii=False, separators=(",", ":"),
     ).encode("utf-8")
     encoded = b64encode(gzip.compress(data, compresslevel=6, mtime=0)).decode("ascii")

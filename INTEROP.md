@@ -364,6 +364,10 @@ All 182 failures were in the original matrix. Its 8,402 blockers were AgentMauri
 
 Download and extract `full-wimse-matrix-results`, then open `results.html` in a current browser. The viewer includes every audited ID. Filter by status, suite, planned hop count, distinct planned peer count, or one or more planned peers. Match any selected peer or require all selected peers. Search by published or runtime ID, scenario, hop sequence, or reason. Select a row's ID to see the exact result metadata, planned roles and pins, and evidence path when supplied. The peer and hop filters describe the planned assignment. A refusal or blocker can stop execution before a later planned peer is reached.
 
+Open **Hop features** to filter by transport authentication, application credential, application proof, WIC identifier scheme, WIC issuer, or WIT issuer. Multiple checked values in a group are alternatives. One planned hop must satisfy all active groups. Use **Hop position** or **Hop receiver** to narrow the match, for example to the File Tool. These filters describe the plan. The results and evidence fields describe what ran.
+
+**Direct test CA** is the baseline lab issuer for a WIC. **Lab WIT issuer** is the baseline issuer for a WIT. **SPIFFE URI** describes the certificate identifier scheme and can be paired with different WIC issuers. **Not applicable** marks an explicit `none` field. **Unavailable in report** marks a missing field. Select an execution ID for labeled hop details, and expand **Pins and evidence** for the exact fixture IDs, revisions, and report references.
+
 The original CSV and summary remain available in the artifact. For an earlier artifact that has `per-id.csv.gz` and `summary.json` but lacks the viewer, regenerate it from the repository root using the matching frozen manifest.
 
 ```sh

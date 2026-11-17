@@ -38,6 +38,17 @@
     input, select { background: Canvas; }
     button { cursor: pointer; background: var(--surface); }
     button:disabled { cursor: default; opacity: .65; }
+    #hop-features { margin-top: .75rem; padding: .5rem .75rem; border: 1px solid var(--line); border-radius: .35rem; }
+    #hop-features summary, #case-evidence summary { cursor: pointer; font-weight: 650; }
+    #feature-controls { display: block; }
+    .hop-scope { display: flex; flex-wrap: wrap; gap: .75rem; margin-bottom: .75rem; }
+    .feature-groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr)); gap: .75rem; }
+    .feature-groups fieldset { display: grid; align-content: start; gap: .3rem; border: 1px solid var(--line); padding: .5rem .65rem; border-radius: .35rem; }
+    .feature-groups legend { font-weight: 600; }
+    .feature-groups label { display: flex; align-items: start; font-weight: 400; }
+    #steps > li { padding: .5rem .7rem; border: 1px solid var(--line); border-radius: .35rem; }
+    #steps dl, #hop-pins dl { margin: .4rem 0 0; gap: .2rem .75rem; }
+    #case-evidence { margin-top: 1rem; }
     .table-wrap { overflow-x: auto; }
     table { width: 100%; border-collapse: collapse; }
     td, th { text-align: left; vertical-align: top; padding: .5rem .75rem; border-bottom: 1px solid var(--line); }
@@ -93,6 +104,17 @@
         </div>
         <button type="reset">Clear filters</button>
       </fieldset>
+      <details id="hop-features">
+        <summary id="feature-summary">Hop features</summary>
+        <fieldset id="feature-controls" disabled>
+          <p>Check any values within a group. One planned hop must match every selected group.</p>
+          <div class="hop-scope">
+            <label>Hop position<select id="feature-hop"><option value="">Any hop</option></select></label>
+            <label>Hop receiver<select id="feature-receiver"><option value="">Any receiver</option></select></label>
+          </div>
+          <div id="feature-groups" class="feature-groups"></div>
+        </fieldset>
+      </details>
     </form>
     <p id="matches" role="status">Loading execution results…</p>
     <noscript>This report requires JavaScript. Use per-id.csv.gz for the same audited outcomes.</noscript>
@@ -117,6 +139,11 @@
     <dl id="fields"></dl>
     <h3>Planned hops</h3>
     <ol id="steps"></ol>
+    <details id="case-evidence">
+      <summary>Pins and evidence</summary>
+      <dl id="evidence-fields"></dl>
+      <ol id="hop-pins"></ol>
+    </details>
   </dialog>
   <script id="report-data" type="application/octet-stream"><!-- REPORT_DATA --></script>
   <script>
@@ -128,6 +155,24 @@
     };
     const number = value => value.toLocaleString("en-US");
     const pageSize = 50;
+    const hopFields = {
+      tls: "Transport authentication profile",
+      credential: "Application credential",
+      application_proof: "Application proof",
+      identifier_scheme: "WIC identifier",
+      wic_issuer: "WIC issuer",
+      wit_issuer: "WIT issuer"
+    };
+    const hopLabels = {
+      credential: {wit: "WIT", none: "None"},
+      identifier_scheme: {wimse: "WIMSE URI", spiffe: "SPIFFE URI"},
+      wic_issuer: {
+        baseline: "Direct test CA", "spire-x509-svid": "SPIRE X.509-SVID",
+        "tba-x509-svid": "TbA X.509-SVID", "teleport-x509-svid": "Teleport X.509-SVID"
+      },
+      wit_issuer: {baseline: "Lab WIT issuer", "spire-wit-svid": "SPIRE WIT-SVID", "tba-wit-svid": "TbA WIT-SVID"}
+    };
+    let profiles = {};
     let rows = [];
     let matches = [];
     let pageNumber = 0;
@@ -156,31 +201,101 @@
       }
     }
 
+    function humanize(value) {
+      if (value === "file-tool") return "File Tool";
+      return value.replaceAll("-", " ").replace(/^./, letter => letter.toUpperCase());
+    }
+
+    function hopValue(hop, key) {
+      const profile = profiles[hop.profile];
+      if (key === "credential") {
+        return profile ? (profile.application_proof === "None" ? "none" : "wit") : "unavailable";
+      }
+      return (profile?.[key] ?? hop[key]) ?? "unavailable";
+    }
+
+    function featureLabel(key, value) {
+      if (value === "unavailable") return "Unavailable in report";
+      if (value === "none" && key !== "credential") return "Not applicable";
+      return hopLabels[key]?.[value] ?? value;
+    }
+
+    function addFeatureChoices() {
+      const groupValues = Object.fromEntries(Object.keys(hopFields).map(key => [key, new Set()]));
+      const receivers = new Set();
+      let maxHops = 0;
+      for (const row of rows) {
+        maxHops = Math.max(maxHops, row.hops.length);
+        for (const hop of row.hops) {
+          receivers.add(hop.receiver);
+          for (const key of Object.keys(hopFields)) groupValues[key].add(hopValue(hop, key));
+        }
+      }
+      addOptions("feature-hop", Array.from({length: maxHops}, (_, index) => index + 1), hop => "Hop " + hop);
+      addOptions("feature-receiver", [...receivers].sort(), humanize);
+      for (const [key, title] of Object.entries(hopFields)) {
+        const fieldset = document.createElement("fieldset");
+        fieldset.append(element("legend", title));
+        const values = [...groupValues[key]].sort((a, b) => featureLabel(key, a).localeCompare(featureLabel(key, b)));
+        for (const value of values) {
+          const checkbox = document.createElement("input");
+          checkbox.type = "checkbox";
+          checkbox.name = key;
+          checkbox.value = value;
+          const label = document.createElement("label");
+          label.append(checkbox, document.createTextNode(featureLabel(key, value)));
+          fieldset.append(label);
+        }
+        byId("feature-groups").append(fieldset);
+      }
+    }
+
+    function descriptionFields(fields) {
+      return fields.flatMap(([label, value]) =>
+        value === null || value === undefined || value === "" ? [] : [element("dt", label), element("dd", value)]
+      );
+    }
+
     function inspect(row) {
       const fields = [
-        ["Execution ID", row.execution_id], ["Outcome", labels[row.status]],
-        ["Suite", labels[row.lane]], ["Scenario or variant", row.scenario],
-        ["Hop sequence", row.hop_sequence_id], ["Expected result", row.expected],
-        ["Expected effects", row.expected_effects], ["Observed reason", row.reason],
-        ["Source status", row.source_status], ["Runtime ID", row.runtime_id],
-        ["Shard", row.shard], ["Evidence", row.evidence]
+        ["Outcome", labels[row.status]], ["Suite", labels[row.lane]],
+        ["Expected result", row.expected], ["Expected effects", row.expected_effects],
+        ["Observed reason", row.reason]
       ];
-      byId("fields").replaceChildren(...fields.flatMap(([label, value]) =>
-        value === null || value === undefined || value === "" ? [] : [element("dt", label), element("dd", value)]
-      ));
+      byId("fields").replaceChildren(...descriptionFields(fields));
+      const evidence = [
+        ["Execution ID", row.execution_id], ["Scenario or variant", row.scenario],
+        ["Hop sequence", row.hop_sequence_id], ["Source status", row.source_status],
+        ["Runtime ID", row.runtime_id], ["Shard", row.shard], ["Evidence path", row.evidence]
+      ];
+      byId("evidence-fields").replaceChildren(...descriptionFields(evidence));
+      byId("case-evidence").open = false;
       byId("steps").replaceChildren(...row.hops.map(hop => {
-        const item = element("li", hop.operation + ": " + hop.caller + " → " + hop.receiver);
-        for (const side of ["caller", "receiver"]) {
-          const pin = hop[side + "_pin"];
-          if (pin) item.append(element("div", side + ": " + pin.filter(Boolean).join(" · ")));
+        const endpoints = ["caller", "receiver"].map(side => {
+          const role = humanize(hop[side]);
+          const implementation = hop[side + "_pin"]?.[0];
+          return implementation ? role + " (" + implementation + ")" : role;
+        });
+        const item = document.createElement("li");
+        item.append(element("strong", humanize(hop.operation) + " · " + endpoints.join(" → ")));
+        const settings = Object.entries(hopFields).map(([key, label]) => [label, featureLabel(key, hopValue(hop, key))]);
+        if (hop.support) settings.push(["Support role", humanize(hop.support)]);
+        const list = document.createElement("dl");
+        list.append(...descriptionFields(settings));
+        item.append(list);
+        return item;
+      }));
+      byId("hop-pins").replaceChildren(...row.hops.map(hop => {
+        const item = element("li", humanize(hop.operation));
+        const pins = [["Profile ID", hop.profile]];
+        for (const [role, pin] of [["Caller", hop.caller_pin], ["Receiver", hop.receiver_pin]]) {
+          if (!pin) continue;
+          const [implementation, version, fixture] = pin;
+          pins.push([role + " implementation", implementation], [role + " version", version], [role + " fixture", fixture]);
         }
-        const settings = [
-          hop.profile, hop.identifier_scheme,
-          hop.wic_issuer && "WIC issuer: " + hop.wic_issuer,
-          hop.wit_issuer && "WIT issuer: " + hop.wit_issuer,
-          hop.support && "Support role: " + hop.support
-        ].filter(Boolean);
-        if (settings.length) item.append(element("div", settings.join(" · ")));
+        const list = document.createElement("dl");
+        list.append(...descriptionFields(pins));
+        item.append(list);
         return item;
       }));
       byId("detail").showModal();
@@ -224,6 +339,17 @@
       const peerCount = byId("peer_count").value;
       const peers = [...byId("peer-options").querySelectorAll("input:checked")].map(input => input.value);
       const matchAll = byId("peer-match").value === "all";
+      const position = byId("feature-hop").value;
+      const receiver = byId("feature-receiver").value;
+      const selected = new Map();
+      for (const input of byId("feature-groups").querySelectorAll("input:checked")) {
+        if (!selected.has(input.name)) selected.set(input.name, new Set());
+        selected.get(input.name).add(input.value);
+      }
+      const groups = [...selected];
+      const filteredHops = position || receiver || groups.length;
+      const active = groups.length + Number(Boolean(position)) + Number(Boolean(receiver));
+      byId("feature-summary").textContent = active ? "Hop features (" + active + " filters)" : "Hop features";
       byId("peer-summary").textContent = peers.length ? number(peers.length) + " selected" : "All peers";
       matches = rows.filter(row =>
         (!status || row.status === status) &&
@@ -233,6 +359,10 @@
         (!peers.length || (matchAll
           ? peers.every(peer => row.peers.includes(peer))
           : peers.some(peer => row.peers.includes(peer)))) &&
+        (!filteredHops || row.hops.some((hop, index) =>
+          (!position || index + 1 === Number(position)) &&
+          (!receiver || hop.receiver === receiver) &&
+          groups.every(([key, values]) => values.has(hopValue(hop, key))))) &&
         (!query || [row.execution_id, row.runtime_id, row.scenario, row.reason, row.hop_sequence_id]
           .some(value => value?.toLowerCase().includes(query)))
       );
@@ -247,6 +377,7 @@
       const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream("gzip"));
       const report = await new Response(stream).json();
       rows = report.rows;
+      profiles = report.profiles;
       byId("total").textContent = number(rows.length);
       for (const status of ["pass", "fail", "blocked"]) {
         byId(status).textContent = number(report.counts[status]);
@@ -269,6 +400,7 @@
       const peerCounts = [...new Set(rows.map(row => row.peers.length))].sort((a, b) => a - b);
       addOptions("peer_count", peerCounts, count => count + (count === 1 ? " peer" : " peers"));
       addPeerChoices([...peers].sort());
+      addFeatureChoices();
       byId("peer-picker").addEventListener("keydown", event => {
         if (event.key === "Escape" && byId("peer-picker").open) {
           byId("peer-picker").open = false;
@@ -277,6 +409,7 @@
       });
 
       byId("controls").disabled = false;
+      byId("feature-controls").disabled = false;
       byId("filters").addEventListener("submit", event => event.preventDefault());
       byId("filters").addEventListener("change", applyFilters);
       byId("filters").addEventListener("reset", () => setTimeout(applyFilters, 0));
