@@ -103,7 +103,8 @@ def write_landing_page(destination, counts, hop_counts, run_url):
     for hop, outcomes in sorted(hop_counts.items()):
         cells = [sum(outcomes.values()), *(outcomes[status] for status in status_order)]
         table_rows.append(
-            f'<tr><th scope="row">{hop}</th>'
+            f'<tr><th scope="row"><a href="results.html?hops={hop}"'
+            f' aria-label="Search {hop}-hop executions">{hop}</a></th>'
             + "".join(f"<td>{value:,}</td>" for value in cells)
             + "</tr>"
         )

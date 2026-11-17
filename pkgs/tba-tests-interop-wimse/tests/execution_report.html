@@ -23,7 +23,17 @@
     .counts dd { font-size: 1.5rem; font-weight: 650; font-variant-numeric: tabular-nums; }
     fieldset { display: flex; flex-wrap: wrap; align-items: end; gap: .75rem; padding: 0; border: 0; margin: 0; }
     label { display: grid; gap: .2rem; font-weight: 600; }
-    label:first-child { flex: 1 1 18rem; }
+    #controls > label:first-child { flex: 1 1 18rem; }
+    .peer-picker { display: grid; gap: .2rem; }
+    .peer-picker > span { font-weight: 600; }
+    .peer-picker details { position: relative; }
+    .peer-picker summary { cursor: pointer; padding: .35rem .55rem; border: 1px solid var(--line); border-radius: .35rem; background: Canvas; }
+    .peer-panel { position: absolute; right: 0; z-index: 1; width: 20rem; margin-top: .35rem; padding: .75rem; background: Canvas; border: 1px solid var(--line); border-radius: .35rem; }
+    #peer-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .3rem .6rem; margin-top: .75rem; }
+    #peer-options label { display: flex; align-items: start; font-weight: 400; overflow-wrap: anywhere; }
+    @media (max-width: 35rem) {
+      .peer-panel { position: static; width: auto; }
+    }
     input, select, button { font: inherit; color: inherit; padding: .35rem .55rem; border: 1px solid var(--line); border-radius: .35rem; }
     input, select { background: Canvas; }
     button { cursor: pointer; background: var(--surface); }
@@ -66,7 +76,19 @@
         <label>Outcome<select id="status"><option value="">All outcomes</option></select></label>
         <label>Suite<select id="lane"><option value="">All suites</option></select></label>
         <label>Planned hops<select id="hop_count"><option value="">Any length</option></select></label>
-        <label>Planned peer<select id="peer"><option value="">All peers</option></select></label>
+        <div class="peer-picker">
+          <span id="peer-label">Planned peers</span>
+          <details id="peer-picker">
+            <summary id="peer-summary" aria-labelledby="peer-label peer-summary">All peers</summary>
+            <div class="peer-panel">
+              <label>Match<select id="peer-match">
+                <option value="any">Any selected peer</option>
+                <option value="all">All selected peers</option>
+              </select></label>
+              <fieldset id="peer-options" aria-label="Select planned peers"></fieldset>
+            </div>
+          </details>
+        </div>
         <button type="reset">Clear filters</button>
       </fieldset>
     </form>
@@ -114,9 +136,21 @@
       return node;
     }
 
-    function addOptions(id, values) {
+    function addOptions(id, values, format = value => labels[value] ?? value) {
       for (const value of values) {
-        byId(id).add(new Option(labels[value] ?? value, value));
+        byId(id).add(new Option(format(value), value));
+      }
+    }
+
+    function addPeerChoices(peers) {
+      for (const peer of peers) {
+        const checkbox = document.createElement("input");
+        checkbox.type = "checkbox";
+        checkbox.name = "peer";
+        checkbox.value = peer;
+        const label = document.createElement("label");
+        label.append(checkbox, document.createTextNode(peer));
+        byId("peer-options").append(label);
       }
     }
 
@@ -172,7 +206,7 @@
       byId("results").replaceChildren(fragment);
       byId("matches").textContent = matches.length
         ? number(start + 1) + "–" + number(last) + " of " + number(matches.length) + " matching executions"
-        : "No matching executions";
+        : "No matching executions. Clear a filter to broaden your search.";
       byId("page").textContent = matches.length
         ? "Page " + number(pageNumber + 1) + " of " + number(Math.ceil(matches.length / pageSize))
         : "";
@@ -185,12 +219,16 @@
       const status = byId("status").value;
       const lane = byId("lane").value;
       const hops = byId("hop_count").value;
-      const peer = byId("peer").value;
+      const peers = [...byId("peer-options").querySelectorAll("input:checked")].map(input => input.value);
+      const matchAll = byId("peer-match").value === "all";
+      byId("peer-summary").textContent = peers.length ? number(peers.length) + " selected" : "All peers";
       matches = rows.filter(row =>
         (!status || row.status === status) &&
         (!lane || row.lane === lane) &&
         (!hops || row.hop_count === Number(hops)) &&
-        (!peer || row.peers.includes(peer)) &&
+        (!peers.length || (matchAll
+          ? peers.every(peer => row.peers.includes(peer))
+          : peers.some(peer => row.peers.includes(peer)))) &&
         (!query || [row.execution_id, row.runtime_id, row.scenario, row.reason, row.hop_sequence_id]
           .some(value => value?.toLowerCase().includes(query)))
       );
@@ -218,10 +256,19 @@
       byId("provenance").hidden = false;
       addOptions("status", ["pass", "fail", "blocked"]);
       addOptions("lane", new Set(rows.map(row => row.lane)));
-      addOptions("hop_count", [...new Set(rows.map(row => row.hop_count))].sort((a, b) => a - b));
+      const hopCounts = [...new Set(rows.map(row => row.hop_count))].sort((a, b) => a - b);
+      addOptions("hop_count", hopCounts, hops => hops + (hops === 1 ? " hop" : " hops"));
+      const requestedHops = new URLSearchParams(location.search).get("hops");
+      if (hopCounts.map(String).includes(requestedHops)) byId("hop_count").value = requestedHops;
       const peers = new Set();
       for (const row of rows) for (const peer of row.peers) peers.add(peer);
-      addOptions("peer", [...peers].sort());
+      addPeerChoices([...peers].sort());
+      byId("peer-picker").addEventListener("keydown", event => {
+        if (event.key === "Escape" && byId("peer-picker").open) {
+          byId("peer-picker").open = false;
+          byId("peer-summary").focus();
+        }
+      });
 
       byId("controls").disabled = false;
       byId("filters").addEventListener("submit", event => event.preventDefault());
