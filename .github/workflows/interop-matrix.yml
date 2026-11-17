@@ -14,6 +14,9 @@ on:
       require_all_pass:
         type: boolean
         default: false
+      include_rich:
+        type: boolean
+        default: false
   workflow_dispatch:
     inputs:
       shards:
@@ -48,6 +51,8 @@ env:
   TBA_WIMSE_EMILIA_BRIDGE: .interop/emilia/check.mjs
   TBA_WIMSE_TELEPORT_CONTAINER: tba-interop-teleport
   TBA_WIMSE_MINTID_CONTAINER: tba-interop-mintid-driver
+  TBA_WIMSE_RICH_CHECKOUT: .interop/rich
+  TBA_WIMSE_RICH_MANIFEST: pkgs/tba-tests-interop-wimse/matrix/wimse-interop-rich-nine-hop-executions.json.gz
 
 jobs:
   prepare:
@@ -197,6 +202,20 @@ jobs:
           printf 'shards=%s\n' "$shards" >> "$GITHUB_OUTPUT"
           printf 'authgent-shards=%s\n' "$(cat .interop/plan/authgent-shards.json)" >> "$GITHUB_OUTPUT"
           cp .interop/agentmaurice-qualification.json .interop/plan/agentmaurice.json
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        if: ${{ inputs.include_rich }}
+        with:
+          repository: apelov/IETF127-Hackathon-AI2II-WIMSE
+          ref: 49d29ca31d248af4a169176969e712c673f11ef9
+          path: .interop/rich
+          sparse-checkout: peers
+          persist-credentials: false
+      - name: Qualify and partition generic RICH runs
+        if: ${{ inputs.include_rich }}
+        run: |
+          python "$INTEROP_PACKAGE/tests/ci_rich_generic.py" prepare --plan .interop/plan \
+            --baseline "$INTEROP_PACKAGE/matrix/wimse-interop-all-tba-executions.json.gz" \
+            --expanded "$TBA_WIMSE_RICH_MANIFEST" --snapshot "$TBA_WIMSE_PEER_SNAPSHOT"
       - name: Package plan and qualified runtime
         run: |
           tar -czf interop-plan.tgz -C .interop plan
@@ -343,6 +362,24 @@ jobs:
             --qualification .interop/plan/agentmaurice.json --output shard-evidence/agentmaurice.jsonl \
             2>&1 | tee shard-evidence/agentmaurice.log || status=$?
           exit "$status"
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        if: ${{ !cancelled() && inputs.include_rich }}
+        with:
+          repository: apelov/IETF127-Hackathon-AI2II-WIMSE
+          ref: 49d29ca31d248af4a169176969e712c673f11ef9
+          path: .interop/rich
+          sparse-checkout: peers
+          persist-credentials: false
+      - name: Execute generic RICH shard
+        if: ${{ !cancelled() && inputs.include_rich }}
+        env:
+          SHARD: ${{ matrix.shard }}
+          TBA_WIMSE_INCLUDE_NATIVE: '1'
+          TBA_WIMSE_RICH_QUALIFICATION: .interop/plan/rich-generic-qualification.json
+          TBA_WIMSE_RICH_RESULTS: shard-evidence/rich-generic.jsonl
+        run: |
+          export TBA_WIMSE_RICH_SELECTION=".interop/plan/rich-shard-$SHARD.json"
+          python -m pytest -q --tb=short "$INTEROP_PACKAGE/tests/peer/test_rich_generic.py"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: ${{ !cancelled() }}
         with:
@@ -419,6 +456,19 @@ jobs:
         env:
           REPORT_STATUS: ${{ steps.aggregate.outputs.status }}
         run: test "$REPORT_STATUS" = 0
+      - name: Audit generic RICH evidence
+        if: ${{ !cancelled() && inputs.include_rich }}
+        run: |
+          python "$INTEROP_PACKAGE/tests/ci_rich_generic.py" collect --plan plan --reports reports \
+            --baseline "$INTEROP_PACKAGE/matrix/wimse-interop-all-tba-executions.json.gz" \
+            --expanded "$TBA_WIMSE_RICH_MANIFEST" --output rich-generic-report
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: ${{ !cancelled() && inputs.include_rich }}
+        with:
+          name: rich-generic-report
+          path: rich-generic-report/
+          overwrite: true
+          if-no-files-found: error
 
   commit-evidence:
     needs: report

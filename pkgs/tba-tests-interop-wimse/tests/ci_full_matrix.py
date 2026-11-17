@@ -66,7 +66,7 @@ def read_results(path, opener, expected, source_summary, source_counts):
     return rows
 
 
-def rich_blocker(lane, row):
+def rich_role_assignments(lane, row):
     if lane == "rich-workload":
         roles = sorted({
             f"{side}:{endpoint['configuration']}"
@@ -75,9 +75,7 @@ def rich_blocker(lane, row):
         })
         if not roles:
             raise ValueError("RICH workload candidate has no RICH endpoint")
-        if not row["pending_endpoints"] or not row["missing_baselines"]:
-            raise ValueError("RICH workload candidate requires runtime reconciliation")
-        return "RICH workload endpoint and directional baseline unqualified", roles
+        return roles
     roles = sorted({
         f"{side}:{pin[2]}"
         for hop in row["hops"] for side in ("caller", "receiver")
@@ -85,7 +83,7 @@ def rich_blocker(lane, row):
     })
     if not roles:
         raise ValueError("RICH typed candidate has no RICH endpoint")
-    return "RICH generic typed-hop runtime adapter unavailable", roles
+    return roles
 
 
 def aggregate(args):
@@ -105,6 +103,10 @@ def aggregate(args):
                             {"passed", "failed", "blocked", "not-run", "setup-failure"})
     named = read_results(args.nine_hop_report / "per-id.csv", open, expected["nine-hop"], nine_summary,
                          {"pass", "fail", "blocked"})
+    rich_summary = json.loads((args.rich_report / "summary.json").read_text(encoding="utf-8"))
+    rich = read_results(args.rich_report / "results.csv.gz", gzip.open,
+                        expected["rich-workload"] | expected["rich-typed"], rich_summary,
+                        {"passed", "failed", "blocked", "not-run", "setup-failure"})
 
     args.output.mkdir(parents=True, exist_ok=True)
     counts = {lane: Counter({"pass": 0, "fail": 0, "blocked": 0}) for lane in EXPECTED}
@@ -117,21 +119,19 @@ def aggregate(args):
         writer.writerow(("execution_id", "lane", "status", "source_status", "reason", "rich_roles",
                          "hop_sequence_id", "runtime_id", "shard", "evidence"))
         for execution_id, (lane, row) in inventory.items():
-            details = {}
             roles = []
-            if lane in ("baseline", "nine-hop"):
-                details = (baseline if lane == "baseline" else named)[execution_id]
-                source_status = details["status"]
-                status = STATUS[source_status]
-                reason = details["reason"]
-                if source_status in ("not-run", "setup-failure"):
-                    infrastructure[source_status] += 1
-                    reason = f"Infrastructure {source_status}: {reason}"
-            else:
-                status, source_status = "blocked", "preflight-blocked"
-                reason, roles = rich_blocker(lane, row)
-                rich_roles[lane][" + ".join(roles)] += 1
-                rich_sequences[row["hop_sequence_id"]] += 1
+            details = (baseline if lane == "baseline" else named if lane == "nine-hop" else rich)[execution_id]
+            source_status = details["status"]
+            status = STATUS[source_status]
+            reason = details["reason"]
+            if source_status in ("not-run", "setup-failure"):
+                infrastructure[source_status] += 1
+                reason = f"Infrastructure {source_status}: {reason}"
+            if lane.startswith("rich-"):
+                roles = rich_role_assignments(lane, row)
+                if status == "blocked":
+                    rich_roles[lane][" + ".join(roles)] += 1
+                    rich_sequences[row["hop_sequence_id"]] += 1
             if status == "blocked":
                 blockers[lane][reason] += 1
             counts[lane][status] += 1
@@ -148,6 +148,7 @@ def aggregate(args):
         "rich_blocked_by_sequence": dict(rich_sequences.most_common()),
         "infrastructure_outcomes": infrastructure,
         "baseline_errors": baseline_summary.get("errors", []),
+        "rich_errors": rich_summary.get("errors", []),
         "manifest_sha256": sha256(args.expanded.read_bytes()).hexdigest(),
     }
     (args.output / "summary.json").write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
@@ -163,12 +164,12 @@ def aggregate(args):
     if infrastructure:
         lines.extend(("", "Infrastructure outcomes are included in blocked counts and flagged in the per-ID file."))
     (args.output / "summary.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
-    return int(bool(infrastructure or not baseline_summary["complete"] or totals["fail"]))
+    return int(bool(infrastructure or not baseline_summary["complete"] or not rich_summary["complete"] or totals["fail"]))
 
 
 def main():
     parser = ArgumentParser(description=__doc__)
-    for path in ("baseline", "expanded", "baseline-report", "nine-hop-report", "output"):
+    for path in ("baseline", "expanded", "baseline-report", "nine-hop-report", "rich-report", "output"):
         parser.add_argument("--" + path, required=True, type=Path)
     return aggregate(parser.parse_args())
 

@@ -171,6 +171,36 @@ def native_workload_adapters(peer_snapshot, native_qualified_issuers, tmp_path_f
 
 
 @pytest.fixture(scope="session")
+def rich_generic_lab(peer_snapshot, spiffe_peer_adapter, tmp_path_factory):
+    from support.rich_generic import RICH, RichWorkloadLab, pin, rich_source
+
+    evidence = json.loads(Path(os.environ["TBA_WIMSE_RICH_QUALIFICATION"]).read_text(encoding="utf-8"))
+    if evidence["snapshot_sha256"] != sha256(Path(os.environ["TBA_WIMSE_PEER_SNAPSHOT"]).read_bytes()).hexdigest():
+        pytest.fail("RICH controls do not match the execution snapshot")
+    rich_source()
+    baselines = evidence["baselines"]
+    capabilities = {
+        (pin(endpoint), endpoint["role"], endpoint["profile"]): endpoint
+        for baseline in baselines for endpoint in (baseline["caller"], baseline["receiver"])
+        if endpoint["implementation"] == RICH
+    }
+    if len(capabilities) != len(baselines) or len(baselines) != 4 or any(
+        row["outcome"] != "pass" or row["observation"] != {"decision": "allow", "effects": 1}
+        for row in baselines
+    ):
+        pytest.fail("Four passing RICH directional baselines are required")
+    peers = peer_snapshot["peers"]
+    lab = RichWorkloadLab(tmp_path_factory.mktemp("rich-generic"), spiffe_peer_adapter, {
+        **peers,
+        "capabilities": [*peers["capabilities"], *capabilities.values()],
+        "baselines": [*peers["baselines"], *baselines],
+        "rich_generic_qualification": baselines,
+    })
+    lab.qualification = evidence
+    return lab
+
+
+@pytest.fixture(scope="session")
 def typed_hop_adapters(request, peer_snapshot, tmp_path_factory):
     from support.typed_hop_adapters import LocalDelegationAdapter, LocalStatusAdapter
     from support.typed_service_bindings import TypedServiceBindings
@@ -192,9 +222,15 @@ def typed_hop_adapters(request, peer_snapshot, tmp_path_factory):
                 return SimpleNamespace(signature=request.getfixturevalue("spiffe_peer_adapter"))
             return request.getfixturevalue("peer_adapters")["01"]
 
-        adapters[("call", "call", "call")] = TypedWorkloadChain(
-            peer_snapshot["peers"], get_lab,
-        )
+        if os.getenv("TBA_WIMSE_RICH_SELECTION"):
+            from support.rich_generic import RichTypedChain
+
+            rich_lab = request.getfixturevalue("rich_generic_lab")
+            adapters[("call", "call", "call")] = RichTypedChain(
+                rich_lab.peers, lambda: SimpleNamespace(signature=rich_lab),
+            )
+        else:
+            adapters[("call", "call", "call")] = TypedWorkloadChain(peer_snapshot["peers"], get_lab)
         adapters[("service",)] = TypedServiceFlow(
             adapters[("call", "call", "call")], TypedServiceBindings,
             agent_factory=lambda: request.getfixturevalue("peer_workload_api"),

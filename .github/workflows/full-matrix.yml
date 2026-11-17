@@ -26,6 +26,7 @@ jobs:
     with:
       shards: ${{ inputs.baseline_shards }}
       commit_evidence: false
+      include_rich: true
   nine-hop:
     uses: ./.github/workflows/nine-hop.yml
     with:
@@ -52,6 +53,10 @@ jobs:
         with:
           name: nine-hop-results
           path: reports/nine-hop
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: rich-generic-report
+          path: reports/rich
       - name: Reconcile all 161,370 published execution IDs
         run: |
           status=0
@@ -59,6 +64,7 @@ jobs:
             --baseline "$PACKAGE/matrix/wimse-interop-all-tba-executions.json.gz" \
             --expanded "$PACKAGE/matrix/wimse-interop-rich-nine-hop-executions.json.gz" \
             --baseline-report reports/baseline --nine-hop-report reports/nine-hop \
+            --rich-report reports/rich \
             --output full-matrix-results || status=$?
           if [[ -f full-matrix-results/summary.md ]]; then
             cat full-matrix-results/summary.md >> "$GITHUB_STEP_SUMMARY"
