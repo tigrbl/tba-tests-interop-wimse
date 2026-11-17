@@ -36,6 +36,8 @@ Runtime evidence applies to the role, direction, and proof mode exercised with t
 
 ## Hosted results
 
+**[Browse the public execution results](https://tigrbl.github.io/tba-tests-interop-wimse/)** for the summary and hop-count table, or [search all execution IDs](https://tigrbl.github.io/tba-tests-interop-wimse/results.html).
+
 [Run 44021013592, attempt 2](https://github.com/tigrbl/tba-tests-interop-wimse/actions/runs/44021013592/attempts/2) reconciled every ID on GitHub-hosted Ubuntu. **151,251 cases executed to a verdict**.
 
 ### By execution suite
