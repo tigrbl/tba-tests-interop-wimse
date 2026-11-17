@@ -49,9 +49,10 @@ func run(input request) (map[string]string, error) {
 			return nil, err
 		}
 		req.Header.Set("Content-Digest", digest)
+		fields = append([]string{"@method", "@path", "@query"}, fields[3:]...)
 		signer, err := shared.GetWITHTTPSigner(input.PrivateKey, fields, shared.WithNonce(input.Nonce),
 			func(config *httpsign.SignConfig) {
-				config.SetExpires(time.Now().Add(time.Minute).Unix()).SignAlg(false).SetKeyID("wimse")
+				config.SetExpires(time.Now().Add(time.Minute).Unix()).SignAlg(false).SetWIMSEAudience(input.Audience)
 			})
 		if err != nil {
 			return nil, err
@@ -83,8 +84,7 @@ func run(input request) (map[string]string, error) {
 		}
 		config := httpsign.NewVerifyConfig().SetAllowedTags([]string{tag}).SetRejectExpired(true).SetVerifyCreated(true)
 		if audience, ok := params.Params.Get("wimse-aud"); ok {
-			// The pinned IETF peer uses a signed audience parameter instead of
-			// RFC 9421's @authority. This direction needs only verification.
+			// Authenticate the audience as part of the signature parameters.
 			if audience != input.Audience {
 				return nil, fmt.Errorf("WIMSE signature audience differs")
 			}

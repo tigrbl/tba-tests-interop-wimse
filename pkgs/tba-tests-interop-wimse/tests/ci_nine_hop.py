@@ -158,6 +158,7 @@ def check_case(wire, requests, responses, oracle, routes):
                 f"Hop {hop} transaction workload binding differs from the caller WIT")
     proof = wire._jwt_payload(headers(9).get("workload-proof-token") or
                               headers(9).get("authorization", "").removeprefix("WPT "))
+    require(proof.get("aud") == "http://rich.ietf127.example:5063", "Final WPT File Tool audience differs")
     wit = headers(9).get("workload-identity-token", "")
     require(bool(wit and txn_b2) and proof.get("wth") == wire._b64url_sha256(wit) and
             proof.get("tth") == wire._b64url_sha256(txn_b2), "Final WPT token hashes differ")

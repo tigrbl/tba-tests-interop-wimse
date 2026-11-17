@@ -37,7 +37,9 @@ jobs:
           repository: tigrbl/tigrbl_auth
           ref: c12980ae00260c356ced82f57fa92238a2b9f02a
           path: .interop/tba
-          sparse-checkout: pkgs/20-providers/tba-provider-replay-memory
+          sparse-checkout: |
+            pkgs/20-providers/tba-provider-replay-memory
+            pkgs/55-profiles/tba-profile-workload-proof-wimse-wpt
           persist-credentials: false
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
@@ -48,8 +50,11 @@ jobs:
           cache: false
       - name: Build pinned runtime assets
         run: |
+          support="$GITHUB_WORKSPACE/$INTEROP_PACKAGE/tests/support"
+          wpt=.interop/tba/pkgs/55-profiles/tba-profile-workload-proof-wimse-wpt
+          patch --batch -d "$wpt" -p1 < "$support/nine_hop_tba_wpt_audience.patch"
           python -m pip wheel --wheel-dir .interop/assets/wheels "./$INTEROP_PACKAGE[wpt]" \
-            .interop/tba/pkgs/20-providers/tba-provider-replay-memory 'cryptography==50.0.2'
+            .interop/tba/pkgs/20-providers/tba-provider-replay-memory "./$wpt" 'cryptography==50.0.2'
           bash .github/scripts/fetch-agentmaurice.sh .interop/assets/maurice
           mkdir .interop/cofide-build
           cp .interop/cofide/{go.mod,go.sum} "$INTEROP_PACKAGE/tests/support/nine_hop_cofide_bridge.go" .interop/cofide-build/
@@ -58,6 +63,11 @@ jobs:
             go mod edit -module=interop-ci.invalid/cofide-nine-hop \
               -require=github.com/cofide/wimse-s2s-httpsig-poc@v0.0.0 \
               -replace=github.com/cofide/wimse-s2s-httpsig-poc=../cofide
+            httpsign=$(go mod download -json github.com/yaronf/httpsign@v0.3.1 | python -c 'import json,sys; print(json.load(sys.stdin)["Dir"])')
+            cp -R "$httpsign" ../httpsign
+            chmod -R u+w ../httpsign
+            patch --batch -d ../httpsign -p1 < "$support/nine_hop_httpsign_wimse_audience.patch"
+            go mod edit -replace=github.com/yaronf/httpsign=../httpsign
             go build -mod=mod -o ../assets/cofide-bridge .
           )
           tar -czf nine-hop-runtime.tgz -C .interop/assets .

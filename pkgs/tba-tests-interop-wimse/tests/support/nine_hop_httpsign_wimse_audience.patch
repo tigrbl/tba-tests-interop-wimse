@@ -1,0 +1,39 @@
+--- a/config.go
++++ b/config.go
+@@ -17,6 +17,7 @@
+ 	nonce       string
+ 	tag         string
+ 	keyID       *string
++	wimseAudience string
+ }
+ 
+ // NewSignConfig generates a default configuration.
+@@ -75,6 +76,12 @@
+ // SetKeyID configures a keyid value that will be included as a signature parameter.
+ func (c *SignConfig) SetKeyID(keyID string) *SignConfig {
+ 	c.keyID = &keyID
++	return c
++}
++
++// SetWIMSEAudience binds the configured receiver in the signature parameters.
++func (c *SignConfig) SetWIMSEAudience(audience string) *SignConfig {
++	c.wimseAudience = audience
+ 	return c
+ }
+ 
+--- a/signatures.go
++++ b/signatures.go
+@@ -297,6 +297,13 @@
+ 		}
+ 		p.Add("keyid", *config.keyID)
+ 	}
++	if config.wimseAudience != "" {
++		aud, err := quotedString(config.wimseAudience)
++		if err != nil {
++			return "", fmt.Errorf("malformed WIMSE audience: %w", err)
++		}
++		p.Add("wimse-aud", aud)
++	}
+ 	return fields.asSignatureInput(p)
+ }
+ 

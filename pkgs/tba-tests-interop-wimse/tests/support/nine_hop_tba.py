@@ -3,15 +3,17 @@
 from base64 import b64encode
 from contextvars import ContextVar
 from hashlib import sha256
+import json
 from math import isfinite
+from pathlib import Path
 from secrets import token_urlsafe
 from time import time
 from urllib.parse import urlsplit
 
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+from cryptography.hazmat.primitives.serialization import Encoding, NoEncryption, PrivateFormat, load_pem_private_key
 from tba_concrete_jwt import decode_jwt_unverified
 from tba_profile_workload_credential_wimse_wit import verify_wit
-from tba_profile_workload_credential_wimse_wit.issuance import issue_wit
 from tba_profile_workload_proof_wimse_http_signature.request import (
     FIELDS,
     _authenticate_signature,
@@ -38,6 +40,7 @@ COORDINATOR_AUDIENCE = "http://rich.ietf127.example:5060"
 RESEARCH_AUDIENCE = "http://rich.ietf127.example:5062"
 COORDINATOR_SUBJECT = "wimse://rich.ietf127.example/agent/coordinator"
 RESEARCH_SUBJECT = "wimse://rich.ietf127.example/agent/research"
+FILE_AUDIENCE = "http://rich.ietf127.example:5063"
 DRIVER_SUBJECT = "wimse://peer.ietf127.example/client"
 INITIAL_SCOPE = {"files:read", "files:list"}
 
@@ -60,9 +63,9 @@ def _require(condition, reason):
 
 
 class _Issuer:
-    def __init__(self, fixture, name, *trust_bundles):
+    def __init__(self, fixture, name, *trust_bundles, key=None):
         self.kid = name + "-tba"
-        key = Ed25519PrivateKey.generate()
+        key = key if key is not None else Ed25519PrivateKey.generate()
         self.signer = JwsCryptographyProvider({self.kid: key})
         public = fixture.jwk_from_public(key.public_key(), kid=self.kid, alg="EdDSA")
         for bundle in trust_bundles:
@@ -113,7 +116,7 @@ def _path(url):
 
 
 class _Bindings:
-    def __init__(self, fixture, domain_a, domain_b):
+    def __init__(self, fixture, domain_a, domain_b, research_key):
         self.fixture = fixture
         self.replay = MemoryReplayCheckProvider()
         self.subject = ContextVar("nine_hop_tba_verified_subject", default=None)
@@ -122,7 +125,7 @@ class _Bindings:
         self.as_a = _Issuer(fixture, "as_a", domain_a.AS_A_JWKS, domain_b.as_a_jwks)
         self.as_b = _Issuer(fixture, "as_b", domain_b.as_b_jwks)
         self.tts_b = _Issuer(fixture, "tts_b", domain_b.tts_b_jwks)
-        self.rich = _Issuer(fixture, "rich", domain_b.rich_jwks)
+        self.rich = _Issuer(fixture, "rich", domain_b.rich_jwks, key=research_key)
 
     def sign_driver(self, method, url, body, wit, wkey, **kwargs):
         if urlsplit(url).path.endswith("/workflows/text-stats/executions"):
@@ -153,9 +156,10 @@ class _Bindings:
         self.subject.set(None)
         try:
             if urlsplit(path_and_query).path == "/files/read":
+                _require(expected_aud == FILE_AUDIENCE, "unexpected File Tool audience")
                 selected = authenticate_wpt_request(
                     pairs, audience=expected_aud, trust_by_domain=trusted, now=instant,
-                    replay_store=self.replay,
+                    replay_store=self.replay, preserve_empty_path=True,
                 )
                 subject = selected.claims["sub"]
                 mechanism = "wpt"
@@ -193,22 +197,27 @@ class _Bindings:
 
     def sign_wpt(self, method, url, body, wit, wkey, *, aud, alg, headers=None,
                  content_type="application/json", txn_token=None):
+        _require(aud == FILE_AUDIENCE, "unexpected File Tool audience")
         _require(txn_token is not None and (headers or {}).get("Txn-Token") == txn_token,
                  "expected the same narrowed transaction token in both WPT inputs")
         # This pinned JOSE signer offers EdDSA, so provision a fresh native
         # Research WIT with an EdDSA confirmation key for the outgoing proof.
         instant = _now(None)
         workload = Ed25519PrivateKey.generate()
-        credential = issue_wit(
-            self.rich.signer, subject=RESEARCH_SUBJECT,
-            confirmation_jwk=self.fixture.jwk_from_public(workload.public_key(), alg="EdDSA"),
-            issuer_key_reference=self.rich.kid, issuer_key_id=self.rich.kid,
-            issuer_algorithm="EdDSA", issued_at=instant, expires_at=instant + 300,
+        credential = sign_compact_jwt(
+            self.rich.signer,
+            {
+                "iss": "http://rich.ietf127.example", "sub": RESEARCH_SUBJECT,
+                "cnf": {"jwk": self.fixture.jwk_from_public(workload.public_key(), alg="EdDSA")},
+                "iat": instant, "exp": instant + 300,
+            },
+            headers={"typ": "wit+jwt", "alg": "EdDSA", "kid": self.rich.kid},
+            key_reference=self.rich.kid,
         )
         presented = present_wit(
             JwsCryptographyProvider({"research": workload}), credential,
             workload_key_reference="research", target_uri=aud, now=instant,
-            transaction_token=txn_token,
+            transaction_token=txn_token, preserve_empty_path=True,
         )
         return self.fixture.Req(method, url, {"Content-Type": content_type, **presented}, body)
 
@@ -279,9 +288,26 @@ class _Bindings:
         return claims
 
 
+def provision_research_issuer(upstream):
+    """Generate the TbA Research issuer before AgentMaurice loads its trust bundle."""
+    import wimse
+
+    keys = Path(upstream) / "keys"
+    key = Ed25519PrivateKey.generate()
+    with (keys / "rich-tba.pem").open("xb") as stream:
+        stream.write(key.private_bytes(Encoding.PEM, PrivateFormat.PKCS8, NoEncryption()))
+    bundle_path = keys / "rich.jwks.json"
+    bundle = json.loads(bundle_path.read_text(encoding="utf-8"))
+    bundle["keys"].append(wimse.jwk_from_public(key.public_key(), kid="rich-tba", alg="EdDSA"))
+    bundle_path.write_text(json.dumps(bundle), encoding="utf-8")
+
+
 def build_bindings(context):
     """Load after the shared runner provisions and imports the fixture keys."""
-    b = _Bindings(context["wimse"], context["domain_a"], context["domain_b"])
+    key_path = context["upstream"] / "keys/rich-tba.pem"
+    research_key = load_pem_private_key(key_path.read_bytes(), None) if key_path.is_file() else None
+    _require(research_key is None or isinstance(research_key, Ed25519PrivateKey), "unexpected Research issuer key")
+    b = _Bindings(context["wimse"], context["domain_a"], context["domain_b"], research_key)
     operations = {
         "driver": {"http_sig": b.sign_driver},
         "issuer-a": {"issue_txn_token": b.issue_transaction},

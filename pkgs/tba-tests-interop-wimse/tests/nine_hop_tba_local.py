@@ -72,12 +72,9 @@ def check(upstream, manifest):
         assert len(events) == len(routes), (name, statuses, result["problems"])
         assert all(event["port"] == port and event["path"].endswith(path)
                    for event, (port, path) in zip(events, routes)), name
-        if name in {"all-tba", "mixed-http-signature-and-jose"}:
-            assert result["status"] == "observed", (name, result)
-            assert statuses == scenario["success_oracle"]["http_statuses"], (name, statuses)
-            assert_success(events, wire)
-        else:
-            assert statuses[:8] == [200] * 8 and statuses[8] == 401, (name, statuses, result)
+        assert result["status"] == "observed", (name, result)
+        assert statuses == scenario["success_oracle"]["http_statuses"], (name, statuses)
+        assert_success(events, wire)
         print(f"{name} {statuses} {execution_id}")
 
 
@@ -88,7 +85,9 @@ def assert_success(events, wire):
     assert replies[1]["output"] == {"count": 11, "upper": "HELLO WIMSE"}
     assert replies[4]["summary"] == "$4.2M"
     assert replies[8]["file"] == "Q3.pdf" and replies[8]["content"]
-    assert len({headers[index]["workload-identity-token"] for index in (1, 2, 4)}) == 1
+    assert {wire.parse_jwt(headers[index]["workload-identity-token"])[1]["sub"] for index in (1, 2, 4)} == {
+        "wimse://peer.ietf127.example/client",
+    }
     txn_a, grant, access, b1, b2 = (
         replies[index][key] for index, key in
         ((0, "txn_token"), (2, "assertion"), (3, "access_token"), (5, "txn_token"), (7, "txn_token"))
@@ -107,6 +106,7 @@ def assert_success(events, wire):
         assert headers[idx]["txn-token"] == token
         assert wire.parse_jwt(headers[idx]["workload-identity-token"])[1]["sub"] == token_claims[claim_idx]["req_wl"]
     proof = wire.parse_jwt(headers[8]["authorization"].removeprefix("WPT "))[1]
+    assert proof["aud"] == "http://rich.ietf127.example:5063"
     assert proof["wth"] == wire.b64u(sha256(headers[8]["workload-identity-token"].encode()).digest())
     assert proof["tth"] == wire.b64u(sha256(b2.encode()).digest())
 

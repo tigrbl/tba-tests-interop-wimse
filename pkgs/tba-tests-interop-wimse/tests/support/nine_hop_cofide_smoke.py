@@ -87,7 +87,7 @@ def main():
             server.shutdown()
             thread.join()
     assert [item[1] for item in observations] == [200] * 6
-    assert [item[3] for item in observations] == [400, 400, 400, 200, 200, 400]
+    assert [item[3] for item in observations] == [200] * 6
     for path, status, reason, reference_status, reference_reason in observations:
         print(f"{path}: Cofide verifier {status} {reason}; unchanged reference verifier {reference_status} {reference_reason}")
 

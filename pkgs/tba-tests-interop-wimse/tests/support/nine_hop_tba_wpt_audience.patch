@@ -1,0 +1,72 @@
+--- a/src/tba_profile_workload_proof_wimse_wpt/verification.py
++++ b/src/tba_profile_workload_proof_wimse_wpt/verification.py
+@@ -12,7 +12,7 @@
+     return base64url_encode(hashlib.sha256(value.encode("ascii")).digest())
+ 
+ 
+-def _target_audience(uri: str) -> str:
++def _target_audience(uri: str, *, preserve_empty_path: bool = False) -> str:
+     target = urlsplit(uri)
+     if (
+         target.scheme not in {"http", "https"}
+@@ -20,7 +20,8 @@
+         or target.username is not None
+     ):
+         raise ValueError("WPT audience requires an absolute HTTP target URI")
+-    return target._replace(path=target.path or "/", query="", fragment="").geturl()
++    path = target.path if preserve_empty_path else target.path or "/"
++    return target._replace(path=path, query="", fragment="").geturl()
+ 
+ 
+ def verify_wpt(
+@@ -35,6 +36,7 @@
+     max_lifetime: int = 300,
+     presented_headers=(),
+     bound_token_headers=(),
++    preserve_empty_path: bool = False,
+ ):
+     token = decode_jwt_unverified(proof)
+     headers = token.jws.protected_headers
+@@ -43,7 +45,7 @@
+     if headers["alg"] != confirmation_key.get("alg"):
+         raise ValueError("WPT algorithm does not match the confirmation key")
+     claims = token.claims
+-    target = _target_audience(audience)
++    target = _target_audience(audience, preserve_empty_path=preserve_empty_path)
+     audiences = claims.get("aud")
+     if isinstance(audiences, str):
+         audiences = [audiences]
+@@ -112,6 +114,7 @@
+     now: float,
+     replay_store,
+     bound_token_headers=(),
++    preserve_empty_path: bool = False,
+ ):
+     """Authenticate HTTP headers using the application's configured target audience."""
+     headers = tuple(headers)
+@@ -139,5 +142,6 @@
+         replay_store=replay_store,
+         presented_headers=headers,
+         bound_token_headers=bound_token_headers,
++        preserve_empty_path=preserve_empty_path,
+     )
+     return wit
+--- a/src/tba_profile_workload_proof_wimse_wpt/presentation.py
++++ b/src/tba_profile_workload_proof_wimse_wpt/presentation.py
+@@ -20,6 +20,7 @@
+     now: int,
+     lifetime_seconds: int = 60,
+     transaction_token: str | None = None,
++    preserve_empty_path: bool = False,
+ ) -> dict[str, str]:
+     """Sign and present a proof for an already provisioned WIT."""
+     if (
+@@ -37,7 +38,7 @@
+     if not isinstance(algorithm, str):
+         raise ValueError("WIT confirmation JWK requires a signing algorithm")
+     claims = {
+-        "aud": _target_audience(target_uri),
++        "aud": _target_audience(target_uri, preserve_empty_path=preserve_empty_path),
+         "exp": now + lifetime_seconds,
+         "jti": token_urlsafe(16),
+         "wth": _hash_token(wit),

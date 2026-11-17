@@ -2,8 +2,7 @@
 
 The shared runner owns WIT issuance and trust anchors, token exchange, transaction
 policy, and workflow logic. The Go bridge owns body digest and message signing
-or verification; the alternate wire form authenticates the configured authority
-rather than emitting the unsupported wimse-aud signature parameter.
+or verification. The bridge includes the configured wimse-aud in the signature base.
 """
 
 from base64 import b64encode

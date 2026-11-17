@@ -21,6 +21,12 @@ cleanup() {
 trap cleanup EXIT
 
 python "$upstream/setup/gen_keys.py"
+(
+    umask 077
+    PYTHONPATH="$upstream/peers:$package/tests" python -c \
+        'import sys; from support.nine_hop_tba import provision_research_issuer; provision_research_issuer(sys.argv[1])' \
+        "$upstream"
+)
 docker run -d --name "$name" --network none -e TBA_AGENTMAURICE_NINE_HOP=1 \
     --mount "type=bind,src=$assets/release,dst=/release,readonly" \
     --mount "type=bind,src=$assets/deno,dst=/deno,readonly" \

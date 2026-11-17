@@ -41,13 +41,17 @@ returned true for a duplicate and rejected fresh proofs. The HTTP signature,
 WIT, WPT, JWT and JOSE package Python files used in the local test matched the
 same revision.
 
-The native WPT profile serializes the origin-only File Tool audience as
-`http://rich.ietf127.example:5063/`. The demo Research signer emits the bare
-origin, and its File Tool verifier expects the bare origin.
-`tba_profile_workload_proof_wimse_wpt.verification._target_audience` and
-`peers/wimse.py::verify_jwt` own the respective comparisons. Both mixed
-directions reached the final hop and received HTTP 401. The all-TbA pair
-agreed on the canonical audience.
+The hosted wheel applies `nine_hop_tba_wpt_audience.patch` to the pinned WPT
+profile. The patch exposes an opt-in to preserve an empty URI path. The
+File Tool fixture opts in for both presentation and authentication, and
+expects the exact signed audience `http://rich.ietf127.example:5063`. The
+profile's default canonicalization is retained for other consumers.
+The signature, replay checks and both token hashes are verified as before.
+
+The runner provisions a disposable TbA Research issuer before starting
+AgentMaurice. Its public key joins the existing Research trust bundle.
+TbA signs its Research WIT with that key and includes the configured issuer
+claim, so the receivers can verify the unchanged token bytes.
 
 For local verification after running the upstream fixture's
 `setup/gen_keys.py`, execute `tests/nine_hop_tba_local.py <upstream> <manifest>`

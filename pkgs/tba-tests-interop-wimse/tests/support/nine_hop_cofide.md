@@ -36,6 +36,11 @@ cp .interop/cofide/go.mod .interop/cofide/go.sum \
   go mod edit -module=interop-ci.invalid/nine-hop-cofide \
     -require=github.com/cofide/wimse-s2s-httpsig-poc@v0.0.0 \
     -replace=github.com/cofide/wimse-s2s-httpsig-poc=../cofide
+  httpsign=$(go mod download -json github.com/yaronf/httpsign@v0.3.1 | python -c 'import json,sys; print(json.load(sys.stdin)["Dir"])')
+  cp -R "$httpsign" ../httpsign
+  chmod -R u+w ../httpsign
+  patch --batch -d ../httpsign -p1 < ../../pkgs/tba-tests-interop-wimse/tests/support/nine_hop_httpsign_wimse_audience.patch
+  go mod edit -replace=github.com/yaronf/httpsign=../httpsign
   go build -mod=mod -o ../nine-hop-cofide-bridge .
 )
 export TBA_WIMSE_NINE_HOP_COFIDE_BRIDGE="$PWD/.interop/nine-hop-cofide-bridge"
@@ -51,40 +56,13 @@ encoded in Base64.
 
 ## Wire compatibility
 
-Cofide sends `@method`, `@request-target`, `@authority`, WIT, content type,
-body digest, and any transaction or authorization headers as signed components.
-The signed authority is the expected logical audience authority, also sent as
-the HTTP Host. The TCP connection stays on loopback. A receiver must compare that
-Host against its configured audience before using it as verification context.
+The nine-hop bridge still calls Cofide's pinned signer. An overlay on
+`httpsign` v0.3.1 adds `wimse-aud` to the signed parameters. The bridge sends
+`@method`, `@path`, `@query`, WIT, content type, body digest and applicable
+transaction or authorization headers. Receivers verify their own signatures,
+digests and exact configured audiences. The Cofide verifier also supports the
+original authority-bound format with its existing Host and signature checks.
 
-The pinned `httpsign` v0.3.1
-[`SignConfig`](https://github.com/yaronf/httpsign/blob/v0.3.1/config.go) has no
-extension for setting the draft-08 `wimse-aud` signature parameter. The
-[unchanged IETF receiver](https://github.com/apelov/IETF127-Hackathon-AI2II-WIMSE/blob/49d29ca31d248af4a169176969e712c673f11ef9/peers/wimse.py)
-requires that parameter, rejects `keyid`, and requires `@path` and `@query`.
-Therefore its source exchange or Research cannot accept a Cofide-produced
-signature. Cofide's verifier *can* accept the reference format: the adapter
-checks `wimse-aud` and configures the Go verifier for the incoming derived
-component list. These are separate directional results.
-
-TbA's native verifier can independently verify the Cofide format when the
-receiver configuration opts into it. A local check with TbA v0.4.0.dev2
-accepted Cofide's actual wire bytes by checking Host against
-`urlsplit(expected_aud).netloc` and selecting
-`derived=("@method", "@request-target", "@authority")`,
-`authority=urlsplit(expected_aud).netloc`, `binding="keyid"`,
-`expected_binding="wimse"`, and `required_algorithm="ES256"` in
-`_authenticate_signature`. Any receiving peer should own its verification;
-routing a reference receiver through Cofide would not qualify that handoff.
-
-## Local observations
-
-| Assignment | HTTP outcomes in request order |
-| --- | --- |
-| Cofide ingress; remaining roles reference | Nine 200 responses |
-| Cofide driver and ingress; remaining roles reference | 200, 200, 400 (source exchange rejected the signature) |
-| Cofide ingress and Coordinator; remaining roles reference | Seven requests; Research rejected the signature and Coordinator propagated HTTP 400 |
-| Cofide driver, ingress and Coordinator; native TbA at source exchange, Research and File Tool | Nine 200 responses with the TbA authority profile configured in a disposable local runner. |
-
-These are loopback client observations. Hosted qualification still needs the
-shared runner's capture audit of all nine handoffs.
+The local smoke test checks both the Cofide verifier and the unchanged IETF
+reference verifier. The hosted report qualifies each peer direction from
+the actual captured nine-hop executions.
