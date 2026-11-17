@@ -1,6 +1,6 @@
 # TBA WIMSE interop tests
 
-This interoperability project contains the WIMSE scenario definitions, peer execution plans, and rules for counting combinations.
+This package contains the WIMSE scenarios, execution plans, and runtime fixtures. The [hosted results](../../README.md#hosted-results) cover all **161,370** published execution IDs, including **12,288** passing nine-hop success assignments. See the [interop guide](../../INTEROP.md) for workflows and per-ID evidence.
 
 | File | Purpose |
 | --- | --- |
@@ -16,7 +16,7 @@ This interoperability project contains the WIMSE scenario definitions, peer exec
 | [Per-ID blocker report](matrix/wimse-interop-per-id-blockers.csv.gz) | Runtime and published IDs, historical evidence, and binding gaps |
 | [External peer access](matrix/wimse-external-peer-access.md) | Public artifacts and sandbox dependencies for proposed peers |
 | [RICH and nine-hop candidate inventory](matrix/wimse-interop-rich-nine-hop-executions.json.gz) | The 161,370-ID additive matrix |
-| [Nine-hop qualification](matrix/wimse-interop-rich-nine-hop-qualification.md) | Generation command and contracts for running the named success case |
+| [Nine-hop qualification](matrix/wimse-interop-rich-nine-hop-qualification.md) | Qualified role substitutions, runtime evidence, and generation command |
 
 From this package directory, run `uv run tba-tests-interop-wimse`. After installing the wheel, run `tba-tests-interop-wimse` or `python -m tba_tests_interop_wimse`. The command loads the TOML files from the installed package.
 
@@ -95,16 +95,16 @@ Generated scenarios and peer runs expose `hop_count` and `hop_sequence_id` for t
 ## Verification
 
 Dispatch `full-matrix.yml` for the 161,370-ID inventory on GitHub-hosted
-Ubuntu. It runs the 142,844 baseline and 12,288 named nine-hop executions in
-parallel. The aggregate artifact `full-wimse-matrix-results` reconciles every
-published ID. The 6,238 generic RICH cases run in the baseline shards after
+Ubuntu. The 142,844 original cases and 6,238 generic RICH cases run in
+parallel with the 12,288 named nine-hop executions. The aggregate artifact
+`full-wimse-matrix-results` reconciles every published ID. Generic RICH runs after
 four live directional controls qualify the pinned Research and Coordinator
 proof adapters. The report records unavailable companion endpoints and
 support operations with their assigned roles and hop sequences.
 
 Use the [frozen manifest](matrix/wimse-interop-all-tba-executions.json.gz) to check the 142,844-ID inventory, including native TbA-to-TbA and external peer cases. Run peer components and matrix executions against pinned endpoints. Keep qualification controls separate from per-ID execution results.
 
-The 3,148 structural keys are exhaustive for the options declared by the current templates. The 20 flat axes are retained for comparison and are not all active independent axes in the templates. Runtime adapters and qualifying evidence for the remaining profiles and families are pending. No external peer pair is qualified. The spreadsheet is a snapshot of the current candidate inventory.
+The 3,148 structural keys are exhaustive for the options declared by the original templates. The 20 flat axes and the spreadsheet preserve the earlier inventory for comparison. Consult the hosted per-ID report for runtime outcomes and the remaining binding and qualification gaps.
 
 ## Candidate peer runs
 

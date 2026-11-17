@@ -10,11 +10,14 @@ schema_version = "1.0.0"
 # Entity type keys come from hops.toml. Role, profile, and identifier
 # scheme still determine a workload binding. Qualification is recorded
 # on the corresponding endpoint or support binding in the lab snapshot.
+# qualification_scope and qualification_evidence describe hosted observations.
 [implementations.tba]
 name = "Tigrbl Auth"
 entity_types = ["workload", "delegation-authority", "token-service", "status-policy-service"]
 planned_entity_types = ["credential-delivery-service"]
 native_baseline = "planned"
+qualification_scope = "Hosted native matrix, generic RICH companion endpoints, and all nine roles in ietf127-b-chain. The named File Tool WPT fixture opts into exact empty-path audience handling on the pinned profile."
+qualification_evidence = "https://github.com/tigrbl/tba-tests-interop-wimse/actions/runs/44021013592/attempts/2"
 
 # Development readiness for an all-TbA flow. Qualification for an actual
 # version and configuration remains in the runtime snapshot.
@@ -40,7 +43,9 @@ name = "wimsey"
 entity_types = ["workload"]
 candidate_ref = "56b070582f3e380c5006630698fb4ca808c08b04"
 component_tests = ["tests/peer/test_wimsey_wic_component.py", "tests/peer/test_wimsey_http_signature.py"]
-qualification_gap = "WIC and HTTP signature components validated. A complete peer endpoint needs explicit transport, identity policy, and resource configuration."
+qualification_gap = "The qualified lab supplies transport, identity policy, replay state, and the resource. A separately deployed peer would require its own runtime evidence."
+qualification_scope = "Pinned WIC and application-proof components in the shared HTTPS lab, with its transport, policy, and resource fixtures."
+qualification_evidence = "https://github.com/tigrbl/tba-tests-interop-wimse/actions/runs/44021013592/attempts/2"
 
 [implementations.cred]
 name = "Cred"
@@ -49,12 +54,16 @@ candidate_ref = "hackathon/ietf127"
 candidate_revision = "586e1a76f487c2376e0ba0a4687bb2de8d3eb588"
 component_tests = ["tests/peer/test_baselines.py"]
 qualification_gap = "WIT/WPT and draft-08 HTTP signatures are qualified separately by the pinned HTTPS lab. HTTP signatures cover direct requests and transaction binding with a lab-issued WIT."
+qualification_scope = "Pinned WIT/WPT and HTTP-signature controls in the shared HTTPS lab. Named nine-hop roles are Driver, Ingress, Coordinator, Research, and File Tool."
+qualification_evidence = "https://github.com/tigrbl/tba-tests-interop-wimse/actions/runs/44021013592/attempts/2"
 
 [implementations.cofide]
 name = "Cofide WIMSE PoC"
 entity_types = ["workload"]
 candidate_ref = "7984a60105002dc65b31e9cd08572cd5d10ed9d6"
-qualification_gap = "This revision uses @request-target and P-256 for its demo client. The current TbA fixture targets the draft-08 @path and @query request profile with Ed25519."
+qualification_gap = "Nine-hop qualification uses the harness overlay and configured audiences. The unmodified prototype's authority-bound signature format has separate shared-lab controls."
+qualification_scope = "Pinned P-256 HTTP-signature bridge. The nine-hop Driver, Ingress, and Coordinator use the signed wimse-aud overlay on httpsign v0.3.1."
+qualification_evidence = "https://github.com/tigrbl/tba-tests-interop-wimse/actions/runs/44021013592/attempts/2"
 
 [implementations.combined-wpt-candidate]
 name = "Independent WIC/WPT peer to select"
@@ -74,6 +83,8 @@ entity_types = ["workload"]
 candidate_endpoint_profiles = [{ profile = "wic-mtls", identifier_scheme = "spiffe", roles = ["caller", "receiver"] }]
 reference = "https://datatracker.ietf.org/doc/html/draft-ietf-wimse-workload-creds-03#section-8"
 qualification_gap = "Use the pinned SDK verifier with the shared SPIFFE mTLS fixture. A Defakto-managed credential issuer and application-proof roles require separate evidence."
+qualification_scope = "Pinned SDK verifier for the shared SPIFFE mTLS fixture."
+qualification_evidence = "https://github.com/tigrbl/tba-tests-interop-wimse/actions/runs/44021013592/attempts/2"
 
 [implementations.go-spiffe]
 name = "go-spiffe"
@@ -81,6 +92,8 @@ entity_types = ["workload"]
 candidate_endpoint_profiles = [{ profile = "wic-mtls", identifier_scheme = "spiffe", roles = ["caller", "receiver"] }]
 reference = "https://github.com/spiffe/go-spiffe/tree/main/examples"
 qualification_gap = "Use the pinned go-spiffe verifier with the shared SPIFFE mTLS fixture and the separate SPIRE Agent credential-delivery control."
+qualification_scope = "Pinned go-spiffe verifier for shared SPIFFE mTLS and a separate SPIRE Agent credential-delivery control."
+qualification_evidence = "https://github.com/tigrbl/tba-tests-interop-wimse/actions/runs/44021013592/attempts/2"
 
 [implementations.agentmaurice]
 name = "AgentMaurice"
@@ -90,13 +103,17 @@ candidate_endpoint_profiles = [
     { profile = "wit-http-signature", identifier_scheme = "none", roles = ["caller", "receiver"] },
 ]
 reference = "https://mailarchive.ietf.org/arch/msg/wimse/6ofJ6o3sK9H_XEPCQWn_7SVEza4/"
-qualification_gap = "The v2.2.18 release advertises WIT with WPT and HTTP signatures. Verify the interoperable request interface and both directional bindings before qualifying these roles."
+qualification_gap = "Selected SPIRE WIT-SVID and proof-key bindings and outbound transaction-signature controls remain unresolved. The pinned wimseFetch caller reserves explicitly supplied Txn-Token."
+qualification_scope = "The c9ae5757e9d97ec8fa6b9fc9e6b835c63eba770b loopback fixture qualifies the named Ingress HTTP-signature and File Tool WPT receiver roles."
+qualification_evidence = "https://github.com/tigrbl/tba-tests-interop-wimse/actions/runs/44021013592/attempts/2"
 
 [implementations.rich-hackathon]
 name = "RICH IETF 127 workload services"
 entity_types = ["workload"]
 candidate_revision = "49d29ca31d248af4a169176969e712c673f11ef9"
 reference = "https://github.com/apelov/IETF127-Hackathon-AI2II-WIMSE/blob/49d29ca31d248af4a169176969e712c673f11ef9/peers/domain_b.py"
+qualification_scope = "Pinned Coordinator and Research have distinct workload identities and named nine-hop bindings. Generic controls qualify Coordinator HTTP signatures in both directions with TbA, Research receiving TbA HTTP signatures, and Research calling TbA with WIT/WPT."
+qualification_evidence = "https://github.com/tigrbl/tba-tests-interop-wimse/actions/runs/44021013592/artifacts/14304893080"
 
 [implementations.rich-hackathon.workload_roles.coordinator]
 identity = "wimse://rich.ietf127.example/agent/coordinator"
@@ -116,7 +133,8 @@ entity_types = ["credential-delivery-service"]
 candidate_support_roles = ["credential-delivery"]
 candidate_credentials = ["x509-svid"]
 reference = "https://goteleport.com/docs/machine-workload-identity/workload-identity/getting-started/"
-qualification_gap = "Pin Teleport and tbot configuration. Verify Workload API delivery, the returned trust bundle, and use of the credential on the next mTLS hop."
+qualification_scope = "Hosted Workload API X.509-SVID delivery, trust bundle, and credential use on the next mTLS hop."
+qualification_evidence = "https://github.com/tigrbl/tba-tests-interop-wimse/actions/runs/44021013592/attempts/2"
 
 [implementations.mintid]
 name = "MintID"
@@ -125,7 +143,9 @@ candidate_ref = "public-v2026-11-13.1"
 candidate_support_roles = ["status-authority"]
 scenario_families = ["12"]
 reference = "https://mailarchive.ietf.org/arch/msg/wimse/8wNHgFgnEncJymh7TqA_V0cQQ4g/"
-qualification_gap = "Verify the before-effect control, issuer revocation and holder self-revocation. Use witness refresh to attribute the shared refusal code. Stale and unavailable status need separate fixtures."
+qualification_gap = "Stale and unavailable status require their own evidence."
+qualification_scope = "Hosted status verifier and before-effect controls for the configured MintID fixture."
+qualification_evidence = "https://github.com/tigrbl/tba-tests-interop-wimse/actions/runs/44021013592/attempts/2"
 
 [implementations.authgent]
 name = "authgent"
@@ -134,7 +154,9 @@ candidate_ref = "8341cf932c9816dc666f2a6577b6776bd6f3b978"
 candidate_support_roles = ["transaction-token-issuer"]
 scenario_families = ["07", "08"]
 reference = "https://github.com/cred-ninja/sdk/blob/586e1a76f487c2376e0ba0a4687bb2de8d3eb588/conformance/interop/authgent-txn-tokens.md"
-qualification_gap = "Cred recorded transaction-token interoperability at this revision. Qualify issuance and request binding with TbA, then verify cross-domain exchange separately."
+qualification_gap = "The named nine-hop issuer requires req_wl to match the WIT subject and accepts a prior transaction token for narrowing. The pinned Authgent revision emits a client identifier and refuses the replacement grant."
+qualification_scope = "Pinned transaction-token cases run in the original hosted matrix."
+qualification_evidence = "https://github.com/tigrbl/tba-tests-interop-wimse/actions/runs/44021013592/attempts/2"
 
 [implementations.omniarx]
 name = "OmniArx"
@@ -142,7 +164,7 @@ entity_types = ["status-policy-service"]
 candidate_support_roles = ["approval-verifier"]
 scenario_families = ["17"]
 reference = "https://mailarchive.ietf.org/arch/msg/wimse/7tXnDz__aPxZO9SR2p5zj3elrfc/"
-qualification_gap = "V5 acceptance and R2 display-mismatch refusal were reported. Obtain an accessible verifier with action context and qualify it with the fixed vector clock and fresh replay state."
+qualification_gap = "V5 acceptance and R2 display-mismatch refusal were reported. Hosted rows require a runnable OmniArx verifier and typed approval bindings."
 
 [implementations.emilia]
 name = "EMILIA"
@@ -150,7 +172,8 @@ entity_types = ["status-policy-service"]
 candidate_support_roles = ["before-effect-enforcer"]
 scenario_families = ["12"]
 reference = "https://github.com/emiliaprotocol/emilia-protocol/blob/main/conformance/vectors/revocation.v1.json"
-qualification_gap = "Pin the enforcing adapter and prove that revocation observed after initial authorization prevents the protected effect."
+qualification_scope = "Pinned before-effect adapter in the shared hosted revocation fixture."
+qualification_evidence = "https://github.com/tigrbl/tba-tests-interop-wimse/actions/runs/44021013592/attempts/2"
 
 [implementations.redthread]
 name = "Redthread Security"
@@ -158,7 +181,7 @@ entity_types = ["status-policy-service"]
 candidate_support_roles = ["delegation-receipt-verifier", "before-effect-enforcer"]
 scenario_families = ["12", "13"]
 reference = "https://mailarchive.ietf.org/arch/msg/wimse/XprRASN1rnD9F3KD7u2glKTNMQY/"
-qualification_gap = "Obtain the offered executor trace and manifest, pin a runnable interface, and qualify delegation narrowing and refusal before effect."
+qualification_gap = "Hosted rows require a runnable Redthread verifier and typed before-effect and delegation receipt bindings."
 
 # Local fixture and planned service bindings refer to entity roles in hops.toml.
 # Each typed flow still needs runtime evidence for the binding it uses.
