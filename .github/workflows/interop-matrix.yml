@@ -1,6 +1,19 @@
 name: WIMSE interop matrix
 
 on:
+  workflow_call:
+    inputs:
+      shards:
+        type: string
+        default: '32'
+      execution_id:
+        type: string
+      commit_evidence:
+        type: boolean
+        default: false
+      require_all_pass:
+        type: boolean
+        default: false
   workflow_dispatch:
     inputs:
       shards:

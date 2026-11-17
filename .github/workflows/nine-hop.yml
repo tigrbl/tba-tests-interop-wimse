@@ -1,6 +1,11 @@
 name: WIMSE nine-hop interoperability
 
 on:
+  workflow_call:
+    inputs:
+      shards:
+        type: string
+        default: '16'
   workflow_dispatch:
     inputs:
       shards:
