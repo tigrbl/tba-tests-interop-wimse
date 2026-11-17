@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TbA WIMSE interoperability results</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --line: light-dark(#d0d7de, #3d444d);
+      --muted: light-dark(#57606a, #a4adb8);
+      --surface: light-dark(#f6f8fa, #1b2028);
+      --accent: light-dark(#0969da, #79b8ff);
+    }
+    body { max-width: 65rem; padding: 1.5rem; margin: auto; font: 1rem/1.5 "Inter", system-ui, sans-serif; }
+    h1, h2 { line-height: 1.25; margin: 0 0 .5rem; }
+    p { max-width: 68ch; }
+    a { color: var(--accent); }
+    .button { display: inline-block; border: 1px solid var(--accent); border-radius: .35rem; padding: .5rem .85rem; font-weight: 650; text-decoration: none; }
+    .button:hover { background: var(--surface); text-decoration: underline; }
+    .counts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .75rem; margin: 1.5rem 0 2rem; }
+    .counts div { padding: .75rem 1rem; background: var(--surface); border: 1px solid var(--line); border-radius: .5rem; }
+    dt { font-weight: 600; }
+    dd { margin: 0; font-size: 1.5rem; font-weight: 650; font-variant-numeric: tabular-nums; }
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    th, td { text-align: right; padding: .5rem .75rem; border-bottom: 1px solid var(--line); }
+    th:first-child { text-align: left; }
+    thead, tfoot { background: var(--surface); }
+    tfoot { font-weight: 650; }
+    .muted { color: var(--muted); }
+    @media (max-width: 35rem) { .counts { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>TbA WIMSE interoperability results</h1>
+    <p>Review the audited results for all published execution IDs in the full matrix.</p>
+    <p><a class="button" href="results.html">Search all executions</a></p>
+    <!-- SOURCE -->
+    <dl class="counts">
+      <div><dt>Executions</dt><dd><!-- TOTAL --></dd></div>
+      <div><dt>Passed</dt><dd><!-- PASSED --></dd></div>
+      <div><dt>Failed</dt><dd><!-- FAILED --></dd></div>
+      <div><dt>Blocked</dt><dd><!-- BLOCKED --></dd></div>
+    </dl>
+    <section aria-labelledby="hop-outcomes">
+      <h2 id="hop-outcomes">Outcomes by planned hop count</h2>
+      <p class="muted">Each ID represents one scenario and peer assignment. The count uses the planned hops, even when the observed trace stops at an earlier refusal.</p>
+      <div class="table-wrap">
+        <table aria-labelledby="hop-outcomes">
+          <thead><tr><th scope="col">Planned hops</th><th scope="col">Executions</th><th scope="col">Passed</th><th scope="col">Failed</th><th scope="col">Blocked</th></tr></thead>
+          <tbody>
+            <!-- HOP_ROWS -->
+          </tbody>
+          <tfoot><tr><th scope="row">Total</th><td><!-- TOTAL --></td><td><!-- PASSED --></td><td><!-- FAILED --></td><td><!-- BLOCKED --></td></tr></tfoot>
+        </table>
+      </div>
+    </section>
+    <p><a href="https://github.com/tigrbl/tba-tests-interop-wimse/blob/master/INTEROP.md">Interop guide</a></p>
+  </main>
+</body>
+</html>
