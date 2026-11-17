@@ -38,6 +38,8 @@ Runtime evidence applies to the role, direction, and proof mode exercised with t
 
 [Run 44021013592, attempt 2](https://github.com/tigrbl/tba-tests-interop-wimse/actions/runs/44021013592/attempts/2) reconciled every ID on GitHub-hosted Ubuntu. **151,251 cases executed to a verdict**.
 
+### By execution suite
+
 | Scope | Execution IDs | Passed | Failed | Blocked |
 | --- | ---: | ---: | ---: | ---: |
 | Original matrix | 142,844 | 134,260 | 182 | 8,402 |
@@ -46,7 +48,19 @@ Runtime evidence applies to the role, direction, and proof mode exercised with t
 | IETF 127 nine-hop success | 12,288 | 12,288 | 0 | 0 |
 | **Full matrix** | **161,370** | **151,069** | **182** | **10,119** |
 
-[Results by planned hop count](INTEROP.md#hosted-outcomes-by-hop-count) show the one-, two-, three-, and nine-hop totals.
+### Hosted outcomes by hop count
+
+Counts are execution IDs. Each ID represents a scenario and an applicable peer assignment. The table joins the 161,370-ID frozen manifest to the per-ID outcomes from run 44021013592, attempt 2. A case is grouped by its planned hop count, even if an expected refusal ends the observed trace earlier.
+
+| Planned hops | Execution IDs | Passed | Failed | Blocked |
+| ---: | ---: | ---: | ---: | ---: |
+| 1 | 2,195 | 2,012 | 4 | 179 |
+| 2 | 12,602 | 10,258 | 178 | 2,166 |
+| 3 | 134,285 | 126,511 | 0 | 7,774 |
+| 9 | 12,288 | 12,288 | 0 | 0 |
+| **Total** | **161,370** | **151,069** | **182** | **10,119** |
+
+The one-, two-, and three-hop rows include both the original and applicable generic RICH executions. The nine-hop row covers the named two-domain success case. The four supplemental trust-domain controls ran separately. [Nine-hop diagram and substitutions](INTEROP.md#nine-hop-success-case-across-two-trust-domains) · [Supplemental trust-domain controls](INTEROP.md#verified-trust-domain-coverage)
 
 A pass means the observed result matched the expected outcome, which can include a refusal. A failure means execution produced a different result. A blocked case could not reach a verdict.
 

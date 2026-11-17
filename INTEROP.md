@@ -1,5 +1,24 @@
 # WIMSE interop guide
 
+## Table of contents
+
+- [Hops, trust domains, and execution IDs](#hops-trust-domains-and-execution-ids)
+- [Entities, peers, roles, and capabilities](#entities-peers-roles-and-capabilities)
+  - [Peers and evidence](#peers-and-evidence)
+  - [Workload calls](#workload-calls)
+  - [Credential acquisition, delegation, token exchange, and policy checks](#credential-acquisition-delegation-token-exchange-and-policy-checks)
+  - [RICH Coordinator and Research](#rich-coordinator-and-research)
+- [Arrows and hops](#arrows-and-hops)
+  - [Trust-domain assignments for the example flows](#trust-domain-assignments-for-the-example-flows)
+  - [Verified trust-domain coverage](#verified-trust-domain-coverage)
+  - [Published execution examples](#published-execution-examples)
+- [From a use case to an execution ID](#from-a-use-case-to-an-execution-id)
+- [Authentication and peer assignments](#authentication-and-peer-assignments)
+- [Nine-hop success case across two trust domains](#nine-hop-success-case-across-two-trust-domains)
+  - [Nine-hop role substitutions](#nine-hop-role-substitutions)
+- [Select a run](#select-a-run)
+- [Read the results](#read-the-results)
+
 ## Hops, trust domains, and execution IDs
 
 A **hop** is a directed interaction from an initiating participant to the participant that handles it. The catalog models five types: workload call, delegation, token exchange, credential acquisition, and status or policy check. A gateway can receive one call and originate the next. A hop can stay in one trust domain or cross into another. The named nine-hop chain uses two trust domains. [Hop types and one-, two-, and three-hop diagrams](pkgs/tba-tests-interop-wimse/matrix/wimse-interop-guide.md#arrows-and-hops) · [Trust-domain layouts and supplemental cases](pkgs/tba-tests-interop-wimse/matrix/wimse-interop-guide.md#trust-domain-assignments-for-the-example-flows)
@@ -326,6 +345,10 @@ Changing peer pins can change generated IDs. Compare a runtime report with the f
 
 ## Read the results
 
+<a name="hosted-outcomes-by-hop-count"></a>
+
+See the [README results by planned hop count](README.md#hosted-outcomes-by-hop-count) for the one-, two-, three-, and nine-hop totals.
+
 The [README results table](README.md#hosted-results) records run 44021013592, attempt 2. The [combined report](https://github.com/tigrbl/tba-tests-interop-wimse/actions/runs/44021013592/artifacts/14305462171) contains `summary.md`, `summary.json`, and `per-id.csv.gz`. Look up an `execution_id` in the CSV for its lane, outcome, and reason. Match the report's manifest digest to the inventory used for the run. GitHub artifact retention applies. The workflow summary also records the totals and blocker breakdown.
 
 - **Passed** includes expected refusals where the case checks a refusal and its effects.
@@ -333,20 +356,6 @@ The [README results table](README.md#hosted-results) records run 44021013592, at
 - **Blocked** means execution could not reach a verdict. Inspect the per-ID reason for missing endpoints, handoffs, issuers, or other support roles. Setup failures and cases without results also count as blocked and are flagged as infrastructure outcomes. Attempt 2 had zero infrastructure outcomes.
 
 All 182 failures were in the original matrix. Its 8,402 blockers were AgentMaurice bindings or signing controls (7,838), Redthread (284), and OmniArx (280). The two generic RICH groups had 1,717 blockers, including 880 cases with AgentMaurice companion endpoints or directions and 792 cases requiring source/destination token, accounting/resource, or status/effect fixtures. The report records the remaining support and adapter reasons per ID.
-
-### Hosted outcomes by hop count
-
-Counts are execution IDs. Each ID represents a scenario and an applicable peer assignment. The table joins the 161,370-ID frozen manifest to the per-ID outcomes from run 44021013592, attempt 2. A case is grouped by its planned hop count, even if an expected refusal ends the observed trace earlier.
-
-| Planned hops | Execution IDs | Passed | Failed | Blocked |
-| ---: | ---: | ---: | ---: | ---: |
-| 1 | 2,195 | 2,012 | 4 | 179 |
-| 2 | 12,602 | 10,258 | 178 | 2,166 |
-| 3 | 134,285 | 126,511 | 0 | 7,774 |
-| 9 | 12,288 | 12,288 | 0 | 0 |
-| **Total** | **161,370** | **151,069** | **182** | **10,119** |
-
-The one-, two-, and three-hop rows include both the original and applicable generic RICH executions. The nine-hop row covers the named two-domain success case. The four supplemental trust-domain controls ran separately. [Nine-hop diagram and substitutions](#nine-hop-success-case-across-two-trust-domains) · [Supplemental trust-domain controls](#verified-trust-domain-coverage)
 
 The original-matrix workflow can also publish its audited aggregate to the
 `interop-evidence` branch. Dispatch from `master` with `commit_evidence`
