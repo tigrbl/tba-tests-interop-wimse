@@ -25,6 +25,11 @@ PAGES_HIT_BADGE = (
     '</a></p>'
 )
 
+PAGES_CONTACT = (
+    '<footer><p><a href="https://github.com/tigrbl">Tigrbl on GitHub</a> · '
+    '<a href="mailto:jacob@swarmauri.com">jacob@swarmauri.com</a></p></footer>'
+)
+
 
 def workload_hop_assignments(scenario_id):
     # The frozen scenario ID carries settings that the endpoint records omit.
@@ -117,6 +122,7 @@ def render(manifest, report, run_url, site_dir=None):
         write_landing_page(destination, counts, hop_counts, run_url)
         template = template.replace("<!-- SUMMARY_LINK -->", '<p><a href="./">Back to results summary</a></p>')
         template = template.replace("<!-- PAGE_HITS -->", PAGES_HIT_BADGE)
+        template = template.replace("<!-- SITE_CONTACT -->", PAGES_CONTACT)
     output = destination / "results.html"
     output.write_text(template.replace("<!-- REPORT_DATA -->", encoded), encoding="utf-8")
     return output
@@ -145,6 +151,7 @@ def write_landing_page(destination, counts, hop_counts, run_url):
         "HOP_ROWS": "\n".join(table_rows),
         "SOURCE": source,
         "PAGE_HITS": PAGES_HIT_BADGE,
+        "SITE_CONTACT": PAGES_CONTACT,
     }
     for marker, value in replacements.items():
         page = page.replace(f"<!-- {marker} -->", value)

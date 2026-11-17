@@ -133,6 +133,7 @@
       <summary>Manifest SHA-256</summary>
       <code id="digest"></code>
     </details>
+    <!-- SITE_CONTACT -->
   </main>
   <dialog id="detail" aria-labelledby="detail-title">
     <header><h2 id="detail-title">Execution details</h2><form method="dialog"><button>Close</button></form></header>
@@ -228,7 +229,10 @@
         maxHops = Math.max(maxHops, row.hops.length);
         for (const hop of row.hops) {
           receivers.add(hop.receiver);
-          for (const key of Object.keys(hopFields)) groupValues[key].add(hopValue(hop, key));
+          for (const key of Object.keys(hopFields)) {
+            const value = hopValue(hop, key);
+            if (value !== "unavailable") groupValues[key].add(value);
+          }
         }
       }
       addOptions("feature-hop", Array.from({length: maxHops}, (_, index) => index + 1), hop => "Hop " + hop);
