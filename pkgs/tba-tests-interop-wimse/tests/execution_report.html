@@ -64,6 +64,7 @@
     <!-- SUMMARY_LINK -->
     <h1>WIMSE execution results</h1>
     <div id="source" class="muted"></div>
+    <!-- PAGE_HITS -->
     <dl class="counts">
       <div><dt>Executions</dt><dd id="total">—</dd></div>
       <div><dt>Passed</dt><dd class="pass" id="pass">—</dd></div>
@@ -76,6 +77,7 @@
         <label>Outcome<select id="status"><option value="">All outcomes</option></select></label>
         <label>Suite<select id="lane"><option value="">All suites</option></select></label>
         <label>Planned hops<select id="hop_count"><option value="">Any length</option></select></label>
+        <label>Peer count<select id="peer_count"><option value="">Any peer count</option></select></label>
         <div class="peer-picker">
           <span id="peer-label">Planned peers</span>
           <details id="peer-picker">
@@ -219,6 +221,7 @@
       const status = byId("status").value;
       const lane = byId("lane").value;
       const hops = byId("hop_count").value;
+      const peerCount = byId("peer_count").value;
       const peers = [...byId("peer-options").querySelectorAll("input:checked")].map(input => input.value);
       const matchAll = byId("peer-match").value === "all";
       byId("peer-summary").textContent = peers.length ? number(peers.length) + " selected" : "All peers";
@@ -226,6 +229,7 @@
         (!status || row.status === status) &&
         (!lane || row.lane === lane) &&
         (!hops || row.hop_count === Number(hops)) &&
+        (!peerCount || row.peers.length === Number(peerCount)) &&
         (!peers.length || (matchAll
           ? peers.every(peer => row.peers.includes(peer))
           : peers.some(peer => row.peers.includes(peer)))) &&
@@ -262,6 +266,8 @@
       if (hopCounts.map(String).includes(requestedHops)) byId("hop_count").value = requestedHops;
       const peers = new Set();
       for (const row of rows) for (const peer of row.peers) peers.add(peer);
+      const peerCounts = [...new Set(rows.map(row => row.peers.length))].sort((a, b) => a - b);
+      addOptions("peer_count", peerCounts, count => count + (count === 1 ? " peer" : " peers"));
       addPeerChoices([...peers].sort());
       byId("peer-picker").addEventListener("keydown", event => {
         if (event.key === "Escape" && byId("peer-picker").open) {

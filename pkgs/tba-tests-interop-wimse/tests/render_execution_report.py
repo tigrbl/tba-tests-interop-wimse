@@ -13,6 +13,14 @@ from pathlib import Path
 from ci_full_matrix import GROUPS, read_inventory
 
 
+PAGES_HIT_BADGE = (
+    '<p><a href="https://hits.sh/tigrbl.github.io/tba-tests-interop-wimse/">'
+    '<img alt="Results site hits" referrerpolicy="no-referrer" '
+    'src="https://hits.sh/tigrbl.github.io/tba-tests-interop-wimse.svg?label=Results%20site%20hits">'
+    '</a></p>'
+)
+
+
 def planned_hops(case):
     if "hops" in case:
         for hop in case["hops"]:
@@ -92,6 +100,7 @@ def render(manifest, report, run_url, site_dir=None):
         destination.mkdir(parents=True, exist_ok=True)
         write_landing_page(destination, counts, hop_counts, run_url)
         template = template.replace("<!-- SUMMARY_LINK -->", '<p><a href="./">Back to results summary</a></p>')
+        template = template.replace("<!-- PAGE_HITS -->", PAGES_HIT_BADGE)
     output = destination / "results.html"
     output.write_text(template.replace("<!-- REPORT_DATA -->", encoded), encoding="utf-8")
     return output
@@ -119,6 +128,7 @@ def write_landing_page(destination, counts, hop_counts, run_url):
         "BLOCKED": f'{counts["blocked"]:,}',
         "HOP_ROWS": "\n".join(table_rows),
         "SOURCE": source,
+        "PAGE_HITS": PAGES_HIT_BADGE,
     }
     for marker, value in replacements.items():
         page = page.replace(f"<!-- {marker} -->", value)

@@ -1,5 +1,7 @@
 # WIMSE interop guide
 
+[![Interop guide hits](https://hits.sh/github.com/tigrbl/tba-tests-interop-wimse/blob/master/INTEROP.md.svg?label=Guide%20hits)](https://hits.sh/github.com/tigrbl/tba-tests-interop-wimse/blob/master/INTEROP.md/)
+
 ## Table of contents
 
 - [Hops, trust domains, and execution IDs](#hops-trust-domains-and-execution-ids)
@@ -360,7 +362,7 @@ All 182 failures were in the original matrix. Its 8,402 blockers were AgentMauri
 
 ### Review individual executions
 
-Download and extract `full-wimse-matrix-results`, then open `results.html` in a current browser. The viewer includes every audited ID. Filter by status, suite, planned hop count, or one or more planned peers. Match any selected peer or require all selected peers. Search by published or runtime ID, scenario, hop sequence, or reason. Select a row's ID to see the exact result metadata, planned roles and pins, and evidence path when supplied. The peer and hop filters describe the planned assignment. A refusal or blocker can stop execution before a later planned peer is reached.
+Download and extract `full-wimse-matrix-results`, then open `results.html` in a current browser. The viewer includes every audited ID. Filter by status, suite, planned hop count, distinct planned peer count, or one or more planned peers. Match any selected peer or require all selected peers. Search by published or runtime ID, scenario, hop sequence, or reason. Select a row's ID to see the exact result metadata, planned roles and pins, and evidence path when supplied. The peer and hop filters describe the planned assignment. A refusal or blocker can stop execution before a later planned peer is reached.
 
 The original CSV and summary remain available in the artifact. For an earlier artifact that has `per-id.csv.gz` and `summary.json` but lacks the viewer, regenerate it from the repository root using the matching frozen manifest.
 
