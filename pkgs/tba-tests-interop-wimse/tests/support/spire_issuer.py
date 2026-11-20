@@ -9,7 +9,7 @@ from tempfile import TemporaryDirectory
 from time import monotonic, sleep, time
 from uuid import uuid4
 
-from tba_testkit_workload_credential_conformance.fixtures import _certificate
+from tba_tests_workload_credential_conformance.fixtures import _certificate
 from cryptography import x509
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ec

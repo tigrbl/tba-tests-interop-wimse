@@ -13,7 +13,7 @@ from tba_contracts_workload_identity import SpiffeId, Svid, SvidFormat, Workload
 from tba_protocol_workload_spiffe_workload_api.rpcs import RPC_NAMES
 from tba_protocol_workload_spiffe_workload_api.service import WorkloadApiService
 from tba_provider_spiffe_workload_api import LocalSpiffeWorkloadApiProvider
-from tba_testkit_workload_credential_conformance.fixtures import _certificate
+from tba_tests_workload_credential_conformance.fixtures import _certificate
 
 from support.native_x509_svid import NativeX509SvidIssuer
 from support.wic_fixture import write_leaf

@@ -3,7 +3,7 @@ from pathlib import Path
 from threading import Thread
 
 from cryptography.hazmat.primitives import serialization
-from tba_testkit_workload_credential_conformance.fixtures import _certificate
+from tba_tests_workload_credential_conformance.fixtures import _certificate
 
 from tba_tests_interop_wimse.observations import Observation
 from tba_tests_interop_wimse.wic import (

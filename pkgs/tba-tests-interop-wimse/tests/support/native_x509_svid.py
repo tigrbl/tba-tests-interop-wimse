@@ -3,7 +3,7 @@
 from cryptography.hazmat.primitives import serialization
 from tba_concrete_x509_svid_credential import X509SvidCredential
 from tba_tests_interop_wimse.wic import TlsFiles
-from tba_testkit_workload_credential_conformance.fixtures import _certificate
+from tba_tests_workload_credential_conformance.fixtures import _certificate
 
 from support.wic_fixture import write_leaf
 

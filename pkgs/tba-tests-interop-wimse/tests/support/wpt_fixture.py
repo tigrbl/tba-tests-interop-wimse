@@ -13,7 +13,7 @@ from tba_primitives_identity import base64url_encode
 from tba_profile_workload_credential_wimse_wit import issue_wit
 from tba_provider_jose_cryptography import JwsCryptographyProvider
 from tba_provider_jose_cryptography.jws import sign_compact_jwt
-from tba_testkit_workload_credential_conformance.fixtures import _certificate
+from tba_tests_workload_credential_conformance.fixtures import _certificate
 
 from tba_tests_interop_wimse.catalog import read_catalog
 from tba_tests_interop_wimse.composition import CombinedCaller
